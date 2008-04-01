@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<flexLibProperties version="1">
+<includeClasses>
+<classEntry path="nz.co.codec.flexorm.FindAllCommand"/>
+<classEntry path="nz.co.codec.flexorm.DeleteManyToManyCommand"/>
+<classEntry path="nz.co.codec.flexorm.SelectManyToManyIndicesCommand"/>
+<classEntry path="nz.co.codec.flexorm.SelectManyToManyCommand"/>
+<classEntry path="nz.co.codec.flexorm.EntityManager"/>
+<classEntry path="nz.co.codec.flexorm.CreateCommand"/>
+<classEntry path="nz.co.codec.flexorm.InsertCommand"/>
+<classEntry path="nz.co.codec.flexorm.SelectCommand"/>
+<classEntry path="nz.co.codec.flexorm.UpdateCommand"/>
+<classEntry path="nz.co.codec.flexorm.CascadeType"/>
+<classEntry path="nz.co.codec.flexorm.DeleteCommand"/>
+</includeClasses>
+<includeResources/>
+<namespaceManifests/>
+</flexLibProperties>

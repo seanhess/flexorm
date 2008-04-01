@@ -1,0 +1,221 @@
+FlexORM is an Object Relational Mapping framework for Adobe AIR. It enables ActionScript 3 objects to become persistent objects, using the embedded SQLLite database, transparently; that is, you do not need to write database code or SQL. For example, the FlexORM API looks like:
+
+var organisation:Organisation = new Organisation();
+organisation.name = "Apple";
+
+var contact:Contact = new Contact();
+contact.name = "Steve";
+contact.organisation = organisation;
+em.save(contact);
+
+var loadedContact:Contact = em.loadItem(Contact, contact.id) as Contact;
+
+var allContacts:ArrayCollection = em.findAll(Contact);
+
+
+The framework enables you to concentrate on developing rich domain objects, which can be persisted across application sessions, without writing laborious and complex database logic.
+
+Mapping information is described using annotations on the entity object.
+
+[Bindable] // Required
+[Table(name="contacts")] // Optional; defaults to entity name
+public class Contact
+{
+	private var _orders:IList;
+	
+	[Id] // Required (this first release expects int IDs)
+	[Column(name="id")]
+	public var id:int;
+	
+	[Column(name="name")] // Optional; defaults to property name
+	public var name:String;
+	
+	[ManyToOne]
+	public var organisation:Organisation;
+	
+	// type required without generics in AS3
+	// cascade optional; defaults to "save-update"
+	[OneToMany(type="ormtest.model.Order", cascade="save-update")]
+	public function set orders(value:IList):void
+	{
+		_orders = value;
+		for each(var order:Order in value)
+		{
+			order.contact = this;
+		}
+	}
+	
+	public function get orders():IList
+	{
+		return _orders;
+	}
+	
+	[ManyToMany(type="ormtest.model.Role")]
+	public var roles:IList;
+	
+	[Transient]
+	public var derivedValue:int;
+
+}
+
+
+FlexORM supports the following features:
+
+Simple API
+Non-intrusive (no need to extend from a base class)
+Small
+Save, Update, Delete, Load Item, and Find All operations
+Automatically creates database schema
+Many-to-one associations
+One-to-many associations
+Many-to-many associations (the framework automatically creates and maintains the association table)
+Bidirectional one-to-many associations
+Cascade saves/updates/deletes
+Transient (non-persistent) properties
+Ability to configure table and column names
+
+TODO:
+
+FK constraints
+Inheritance mapping
+Lifecycle callbacks
+Automatic Schema Update
+Synchronisation support + conflict resolution strategies
+Automatic logging
+Lazy loading of associations
+Lazy loading + page support for list associations
+Alternative ID data types
+
+
+Usage Instructions
+
+1.
+
+You must set the following Flex-compiler properties in addition to any existing properties:
+
+-keep-as3-metadata+=Table,Id,Column,ManyToOne,OneToMany,ManyToMany,Transient
+
+The += is important to retain metadata defined by the SDK.
+
+2. Create an instance of the EntityManager
+
+The following example code creates an initialised instance of EntityManager.
+
+private var em:EntityManager = EntityManager.instance;
+
+private var sqlConnection:SQLConnection;
+
+public function setUp():void
+{
+	dbFile = File.userDirectory.resolvePath("database_name");
+	sqlConnection = new SQLConnection();
+	sqlConnection.open(dbFile);
+	em.sqlConnection = sqlConnection;
+}
+
+public function tearDown():void
+{
+	sqlConnection.close();
+}
+
+EntityManager is a singleton.
+
+3. Configure table name
+
+[Table(name="table_name")]
+public class MyEntity
+
+The Table annotation is optional. All [Bindable] objects may be persisted.
+
+The name attribute is optional. It will default to the name of the property.
+
+4. Configure column name
+
+[Column(name="column_name")]
+public var myProperty:String
+
+The Column annotation is optional. All public properties, unless tagged [Transient] will be treated as a persistent property.
+
+The name attribute is optional. It will default to the name of the property.
+
+5. Configure ID
+
+[Id]
+public var id:int
+
+In this first release, an int must be used as the data type.
+
+6. Configure many-to-one association
+
+[ManyToOne(cascade="save-update")]
+public var organisation:Organisation;
+
+The cascade attribute is optional. The cascade type will default to "save-update".
+
+Valid values are:
+"save-update" save or update the associated entities on save of the owning entity
+"delete" delete the associated entities on deletion of the owning entity
+"all" support cascade save, update, and delete
+"none" do not cascade any changes to the associated entities
+
+7. Configure one-to-many association
+
+[OneToMany(type="ormtest.model.Order", cascade="delete")]
+public var orders:IList;
+
+The type attribute is required to determine the class of the listed object.
+
+The cascade attribute is optional. The cascade type will default to "save-update".
+
+Valid values are:
+"save-update" save or update the associated entities on save of the owning entity
+"delete" delete the associated entities on deletion of the owning entity
+"all" support cascade save, update, and delete
+"none" do not cascade any changes to the associated entities
+
+8. Configure many-to-one association
+
+[ManyToMany(type="ormtest.model.Role", cascade="none")]
+public var roles:IList;
+
+The type attribute is required to determine the class of the listed object.
+
+The cascade attribute is optional. The cascade type will default to "save-update".
+
+Valid values are:
+"save-update" save or update the associated entities on save of the owning entity
+"delete" delete the associated entities on deletion of the owning entity
+"all" support cascade save, update, and delete
+"none" do not cascade any changes to the associated entities
+
+9. Configure transient property
+
+[Transient]
+public var derivedValue:int;
+
+The [Transient] tag will tell the EntityManager to ignore the property.
+
+10. Public API methods:
+
+findAll(c:Class) returns an ArrayCollection of all saved objects of type c
+
+loadItem(c:Class, id:int) returns a single member ArrayCollection of the object of type c, identified by id
+
+save(o:Object) insert (if new) or update (if previously saved) the persistent object
+
+remove(o:Object) permanently remove the given object from the database
+
+
+Notes:
+
+You must set the following Flex-compiler properties in addition to any existing properties:
+
+-keep-as3-metadata+=Table,Id,Column,ManyToOne,OneToMany,ManyToMany,Transient
+
+The += is important to retain metadata defined by the SDK.
+
+[Bindable] must be set on the entity class or its properties otherwise properties are described as variables, not accessors in the describeType XML.
+
+Be careful about naming entities with SQL key words; e.g. the class Order should be annotated with [Table(name="orders")]
+
+In this first release, FlexORM expects int IDs.
