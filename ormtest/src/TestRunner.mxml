@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:WindowedApplication xmlns:mx="http://www.adobe.com/2006/mxml" layout="absolute"
+	width="600" height="400"
+	xmlns:flexunit="flexunit.flexui.*"
+	creationComplete="init()" close="tearDown()">
+	<mx:Script>
+		<![CDATA[
+			import flexunit.framework.TestSuite;
+			
+			import nz.co.codec.flexorm.EntityManager;
+			
+			import ormtest.EntityManagerTest;
+			
+			private var em:EntityManager = EntityManager.instance;
+			
+			private var sqlConnection:SQLConnection;
+			
+			private var dbFile:File;
+			
+			private function init():void
+			{
+				setUp();
+				testRunner.test = createSuite();
+				testRunner.startTest();
+			}
+			
+			private function createSuite():TestSuite
+			{
+				return EntityManagerTest.suite();
+			}
+			
+			public function setUp():void
+			{
+				dbFile = File.userDirectory.resolvePath("flexorm_test.db");
+				sqlConnection = new SQLConnection();
+				sqlConnection.open(dbFile);
+				em.sqlConnection = sqlConnection;
+			}
+			
+			public function tearDown():void
+			{
+				sqlConnection.close();
+				dbFile.deleteFile(); // TODO should delete file in close callback
+			}
+		]]>
+	</mx:Script>
+	<flexunit:TestRunnerBase id="testRunner" width="100%" height="100%"/>
+</mx:WindowedApplication>
