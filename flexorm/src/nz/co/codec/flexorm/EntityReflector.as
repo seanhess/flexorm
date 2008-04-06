@@ -77,14 +77,7 @@ package nz.co.codec.flexorm
 			var xml:XML = describeType(new c());
 			entity.table = xml.metadata.(@name == "Table").arg.(@key == "name").@value;
 			var table:String = entity.table;
-/*
-			var findAllCommand:FindAllCommand = new FindAllCommand(table, sqlConnection);
-			var selectCommand:SelectCommand = new SelectCommand(table, sqlConnection);
-			var insertCommand:InsertCommand = new InsertCommand(table, sqlConnection);
-			var updateCommand:UpdateCommand = new UpdateCommand(table, sqlConnection);
-			var deleteCommand:DeleteCommand = new DeleteCommand(table, sqlConnection);
-			var createCommand:CreateCommand = new CreateCommand(table, sqlConnection);
-*/
+			
 			var superType:String = xml.extendsClass[0].@type.toString();
 			if (superType != "Object")
 			{
@@ -152,19 +145,12 @@ package nz.co.codec.flexorm
 					var otmAssociation:OneToManyAssociation = null;
 					if (associatedEntity)
 					{
-//						var otmSelectCommand:SelectCommand = new SelectCommand(associatedEntity.table, sqlConnection);
-//						otmSelectCommand.addFilter(column, column);
 						otmAssociation = new OneToManyAssociation({
 							property: property,
 							column: column,
 							associatedEntity: associatedEntity,
 							cascadeType: cascadeType
-//							selectCommand: otmSelectCommand
 						});
-//						associatedEntity.insertCommand.addColumn(column, column);
-//						associatedEntity.updateCommand.addColumn(column, column);
-
-						// FIX ME associatedEntity.createCommand.addColumn(column, "integer");
 					}
 					else
 					{
@@ -188,26 +174,12 @@ package nz.co.codec.flexorm
 					cascadeType = v.metadata.(@name == "ManyToMany").arg.(@key == "cascade").@value;
 					type = getClass(v.metadata.(@name == "ManyToMany").arg.(@key == "type").@value);
 					var associationTable:String = entity.classname + "_" + getClassName(type);
-/*
-					var selectIndicesCommand:SelectManyToManyIndicesCommand = new SelectManyToManyIndicesCommand(associationTable, joinColumn, sqlConnection);
-					selectIndicesCommand.addFilter(column, column);
-					
-					var mtmInsertCommand:InsertCommand = new InsertCommand(associationTable, sqlConnection);
-					mtmInsertCommand.addColumn(column, column);
-					mtmInsertCommand.addColumn(joinColumn, joinColumn);
-					
-					var mtmDeleteCommand:DeleteCommand = new DeleteCommand(associationTable, sqlConnection);
-					mtmDeleteCommand.addFilter(column, column);
-					mtmDeleteCommand.addFilter(joinColumn, joinColumn);
-*/
 					associatedEntity = map[type];
 					var joinColumn:String = getFkColumn(type);
 					var mtmAssociation:ManyToManyAssociation = null;
 					
 					if (associatedEntity)
 					{
-//						var mtmSelectCommand:SelectManyToManyCommand = new SelectManyToManyCommand(associatedEntity.table, associationTable, associatedEntity.fkColumn, associatedEntity.identity.column, sqlConnection);
-//						mtmSelectCommand.addFilter(column, column);
 						mtmAssociation = new ManyToManyAssociation({
 							property: property,
 							column: column,
@@ -215,15 +187,7 @@ package nz.co.codec.flexorm
 							joinColumn: joinColumn,
 							associatedEntity: associatedEntity,
 							cascadeType: cascadeType
-//							selectIndicesCommand: selectIndicesCommand,
-//							insertCommand: mtmInsertCommand,
-//							deleteCommand: mtmDeleteCommand,
-//							selectCommand: mtmSelectCommand
 						});
-//						var mtmCreateCommand:CreateCommand = new CreateCommand(associationTable, sqlConnection);
-//						mtmCreateCommand.addColumn(column, "integer");
-//						mtmCreateCommand.addColumn(associatedEntity.fkColumn, "integer");
-//						mtmCreateCommand.execute();
 					}
 					else
 					{
@@ -237,9 +201,6 @@ package nz.co.codec.flexorm
 							joinColumn: joinColumn,
 							associatedEntity: associatedEntity,
 							cascadeType: cascadeType
-//							selectIndicesCommand: selectIndicesCommand,
-//							insertCommand: mtmInsertCommand,
-//							deleteCommand: mtmDeleteCommand
 						});
 					}
 					associatedEntity.addManyToManyInverseAssociation(mtmAssociation);
@@ -260,78 +221,8 @@ package nz.co.codec.flexorm
 				if (v.metadata.(@name == "Id").length() > 0)
 				{
 					entity.identity = new Identity({ property: property, column: column });
-//					createCommand.setPk(column);
-//					selectCommand.addFilter(column, property);
-//					updateCommand.addFilter(column, property);
-//					deleteCommand.addFilter(column, property);
 				}
-/*
-				else if (v.metadata.(@name == "ManyToOne").length() > 0)
-				{
-					createCommand.addColumn(column, "integer");
-					insertCommand.addColumn(column, column);
-					updateCommand.addColumn(column, column);
-				}
-				
-				else if (v.metadata.(@name == "OneToMany").length() > 0)
-				{
-					// do nothing
-				}
-				
-				else if (v.metadata.(@name == "ManyToMany").length() > 0)
-				{
-					// do nothing
-				}
-				
-				else if (v.metadata.(@name == "Transient").length() > 0)
-				{
-					// skip
-				}
-				
-				else
-				{
-					createCommand.addColumn(column, getSQLType(v.@type));
-					insertCommand.addColumn(column, property);
-					updateCommand.addColumn(column, property);
-				}
-*/
 			}
-/*
-			for each(var otmAssoc:OneToManyAssociation in entity.oneToManyInverseAssociations)
-			{
-				if (!otmAssoc.selectCommand)
-				{
-					var otmSelectCmd:SelectCommand = new SelectCommand(table, sqlConnection);
-					otmSelectCmd.addFilter(otmAssoc.column, otmAssoc.column);
-					otmAssoc.selectCommand = otmSelectCmd;
-				}
-				createCommand.addColumn(otmAssoc.column, "integer");
-				insertCommand.addColumn(otmAssoc.column, otmAssoc.column);
-				updateCommand.addColumn(otmAssoc.column, otmAssoc.column);
-			}
-			
-			for each(var mtmAssoc:ManyToManyAssociation in entity.manyToManyInverseAssociations)
-			{
-				if (!mtmAssoc.selectCommand)
-				{
-					var mtmSelectCmd:SelectManyToManyCommand = new SelectManyToManyCommand(table, mtmAssoc.associationTable, entity.fkColumn, entity.identity.column, sqlConnection);
-					mtmSelectCmd.addFilter(mtmAssoc.column, mtmAssoc.column);
-					mtmAssoc.selectCommand = mtmSelectCmd;
-				}
-				var mtmCreateCmd:CreateCommand = new CreateCommand(mtmAssoc.associationTable, sqlConnection);
-				mtmCreateCmd.addColumn(mtmAssoc.column, "integer");
-				mtmCreateCmd.addColumn(entity.fkColumn, "integer");
-				mtmCreateCmd.execute();
-			}
-			
-			entity.findAllCommand = findAllCommand;
-			entity.selectCommand = selectCommand;
-			entity.insertCommand = insertCommand;
-			entity.updateCommand = updateCommand;
-			entity.deleteCommand = deleteCommand;
-			
-			createCommand.execute();
-*/
 			entity.initialisationComplete = true;
 			buildSQLQueue.push(entity);
 			return entity;
@@ -440,15 +331,6 @@ package nz.co.codec.flexorm
 				mtmCreateCommand.addColumn(associatedEntity.fkColumn, "integer");
 				mtmCreateCommand.execute();
 			}
-/*
-			for each(mtmAssoc in entity.manyToManyInverseAssociations)
-			{
-				var mtmCreateCmd:CreateCommand = new CreateCommand(mtmAssoc.associationTable, sqlConnection);
-				mtmCreateCmd.addColumn(mtmAssoc.column, "integer");
-				mtmCreateCmd.addColumn(entity.fkColumn, "integer");
-				mtmCreateCmd.execute();
-			}
-*/
 			entity.findAllCommand = findAllCommand;
 			entity.selectCommand = selectCommand;
 			entity.insertCommand = insertCommand;
