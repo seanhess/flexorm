@@ -89,9 +89,7 @@ Alternative ID data types
 
 Usage Instructions
 
-1.
-
-You must set the following Flex-compiler properties in addition to any existing properties:
+1. You must set the following Flex-compiler properties in addition to any existing properties:
 
 -keep-as3-metadata+=Table,Id,Column,ManyToOne,OneToMany,ManyToMany,Transient
 
