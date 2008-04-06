@@ -8,10 +8,11 @@
 			import flexunit.framework.TestSuite;
 			
 			import nz.co.codec.flexorm.EntityManager;
+			import nz.co.codec.flexorm.IEntityManager;
 			
 			import ormtest.EntityManagerTest;
 			
-			private var em:EntityManager = EntityManager.instance;
+			private var em:IEntityManager = EntityManager.instance;
 			
 			private var sqlConnection:SQLConnection;
 			

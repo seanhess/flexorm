@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <mx:WindowedApplication xmlns:mx="http://www.adobe.com/2006/mxml" layout="absolute"
-	width="650" height="400"
+	width="650" height="420"
 	title="Contact Manager"
 	preinitialize="initDb()"
 	creationComplete="initApp()" xmlns:local="*">
@@ -16,6 +16,7 @@
 			import ormtest.model.Role;
 			
 			import nz.co.codec.flexorm.EntityManager;
+			import nz.co.codec.flexorm.IEntityManager;
 			
 			[Bindable]
 			private var contacts:ArrayCollection;
@@ -29,7 +30,7 @@
 			[Bindable]
 			private var selectedContact:Contact;
 			
-			private var em:EntityManager = EntityManager.instance;
+			private var em:IEntityManager = EntityManager.instance;
 			
 			private var newDb:Boolean = true;
 			
@@ -74,6 +75,7 @@
 					
 					var contact:Contact = new Contact();
 					contact.name = "Mark";
+					contact.emailAddr = "mark@acme.com";
 					contact.organisation = organisation;
 					contact.orders = orders;
 					contact.roles = roles;
@@ -118,7 +120,7 @@
 	
 	<mx:DateFormatter id="dateFormatter" formatString="DD/MM/YYYY"/>
 	
-    <mx:TabNavigator width="100%" paddingBottom="10" paddingTop="10"
+    <mx:TabNavigator width="100%" height="100%" paddingBottom="10" paddingTop="10"
     	paddingLeft="10" paddingRight="10" borderStyle="solid">
         <mx:VBox width="100%" label="Contacts">
 			<mx:ApplicationControlBar width="100%" cornerRadius="0">

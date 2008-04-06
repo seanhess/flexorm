@@ -13,8 +13,9 @@
 			import ormtest.model.Role;
 			
 			import nz.co.codec.flexorm.EntityManager;
+			import nz.co.codec.flexorm.IEntityManager;
 			
-			private var em:EntityManager = EntityManager.instance;
+			private var em:IEntityManager = EntityManager.instance;
 			
 			[Bindable]
 			public var organisations:ArrayCollection;
@@ -75,6 +76,7 @@
 			public function saveItem():void
 			{
 				contact.name = contactName.text;
+				contact.emailAddr = emailAddr.text;
 				contact.organisation = organisation.selectedItem as Organisation;
 				contact.roles = new ArrayCollection(checkList.selectedItems);
 				em.save(contact);
@@ -88,8 +90,11 @@
 	</mx:Script>
 	
 	<mx:Form width="100%" height="100%" enabled="{contact != null}">
-		<mx:FormItem label="Name">
+		<mx:FormItem label="Name:">
 			<mx:TextInput id="contactName" text="{contact.name}"/>
+		</mx:FormItem>
+		<mx:FormItem label="Email Address:">
+			<mx:TextInput id="emailAddr" text="{contact.emailAddr}"/>
 		</mx:FormItem>
 		<mx:FormItem label="Organisation:">
 			<comp:ComboBox id="organisation" dataProvider="{organisations}"

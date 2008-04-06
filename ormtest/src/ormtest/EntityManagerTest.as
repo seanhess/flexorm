@@ -6,18 +6,21 @@ package ormtest
 	import mx.collections.ArrayCollection;
 	
 	import nz.co.codec.flexorm.EntityManager;
+	import nz.co.codec.flexorm.IEntityManager;
 	
 	import ormtest.model.Contact;
 	import ormtest.model.Order;
 	import ormtest.model.Organisation;
+	import ormtest.model.Person;
 	import ormtest.model.Role;
 
 	public class EntityManagerTest extends TestCase
 	{
-		private var em:EntityManager = EntityManager.instance;
+		private static var em:IEntityManager = EntityManager.instance;
 		
 		public static function suite():TestSuite
 		{
+			em.debugLevel = 1;
 			var ts:TestSuite = new TestSuite();
 			ts.addTest(new EntityManagerTest("testSaveSimpleObject"));
 			ts.addTest(new EntityManagerTest("testFindAll"));
@@ -26,6 +29,8 @@ package ormtest
 			ts.addTest(new EntityManagerTest("testSaveManyToManyAssociation"));
 			ts.addTest(new EntityManagerTest("testDelete"));
 			ts.addTest(new EntityManagerTest("testCascadeSaveUpdate"));
+			ts.addTest(new EntityManagerTest("testInheritance1"));
+			ts.addTest(new EntityManagerTest("testInheritance2"));
 			return ts;
 		}
 		
@@ -36,6 +41,8 @@ package ormtest
 		
 		public function testSaveSimpleObject():void
 		{
+			trace("\nTest Save Simple Object");
+			trace("=======================");
 			var organisation:Organisation = new Organisation();
 			organisation.name = "Codec Group Limited";
 			em.save(organisation);
@@ -46,6 +53,8 @@ package ormtest
 		
 		public function testFindAll():void
 		{
+			trace("\nTest Find All");
+			trace("=============");
 			var organisation:Organisation = new Organisation();
 			organisation.name = "Adobe";
 			em.save(organisation);
@@ -56,6 +65,8 @@ package ormtest
 		
 		public function testSaveManyToOneAssociation():void
 		{
+			trace("\nTest Save Many To One Association");
+			trace("=================================");
 			var organisation:Organisation = new Organisation();
 			organisation.name = "Apple";
 			
@@ -72,6 +83,8 @@ package ormtest
 		
 		public function testSaveOneToManyAssociations():void
 		{
+			trace("\nTest Save One To Many Associations");
+			trace("==================================");
 			var orders:ArrayCollection = new ArrayCollection();
 			
 			var order1:Order = new Order();
@@ -94,6 +107,8 @@ package ormtest
 		
 		public function testSaveManyToManyAssociation():void
 		{
+			trace("\nTest Save Many To Many Associations");
+			trace("===================================");
 			var roles:ArrayCollection = new ArrayCollection();
 			
 			var role1:Role = new Role();
@@ -116,6 +131,8 @@ package ormtest
 		
 		public function testDelete():void
 		{
+			trace("\nTest Delete");
+			trace("===========");
 			var organisation:Organisation = new Organisation();
 			organisation.name = "Datacom";
 			em.save(organisation);
@@ -127,6 +144,8 @@ package ormtest
 		
 		public function testCascadeSaveUpdate():void
 		{
+			trace("\nTest Cascade Save Update");
+			trace("========================");
 			var orders:ArrayCollection = new ArrayCollection();
 			
 			var order1:Order = new Order();
@@ -153,6 +172,34 @@ package ormtest
 			// verify that cascade delete is not in effect
 			var loadedOrder:Order = em.loadItem(Order, orderId) as Order;
 			assertEquals(loadedOrder.item, "BMW");
+		}
+		
+		public function testInheritance1():void
+		{
+			trace("\nTest Inheritance 1");
+			trace("==================");
+			var person:Person = new Person();
+			person.emailAddr = "person@acme.com";
+			em.save(person);
+			
+			var loadedPerson:Person = em.loadItem(Person, person.id) as Person;
+			assertEquals(loadedPerson.emailAddr, "person@acme.com");
+		}
+		
+		public function testInheritance2():void
+		{
+			trace("\nTest Inheritance 2");
+			trace("==================");
+			var contact:Contact = new Contact();
+			contact.name = "Bill";
+			contact.emailAddr = "bill@ms.com";
+			em.save(contact);
+			
+			var loadedContact:Contact = em.loadItem(Contact, contact.id) as Contact;
+			assertEquals(loadedContact.emailAddr, "bill@ms.com");
+			
+			var loadedPerson:Person = em.loadItem(Person, contact.id) as Person;
+			assertEquals(loadedPerson.emailAddr, "bill@ms.com");
 		}
 		
 	}

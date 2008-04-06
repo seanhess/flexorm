@@ -4,13 +4,13 @@ package ormtest.model
 	
 	[Bindable]
 	[Table(name="contacts")]
-	public dynamic class Contact
+	public class Contact extends Person
 	{
 		private var _orders:IList;
 		
 		[Id]
 		[Column(name="id")]
-		public var id:int;
+		override public var id:int;
 		
 		[Column(name="name")]
 		public var name:String;

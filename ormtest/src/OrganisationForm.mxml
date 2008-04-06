@@ -6,8 +6,9 @@
 			import ormtest.model.Organisation;
 			
 			import nz.co.codec.flexorm.EntityManager;
+			import nz.co.codec.flexorm.IEntityManager;
 			
-			private var em:EntityManager = EntityManager.instance;
+			private var em:IEntityManager = EntityManager.instance;
 			
 			public function newItem():void
 			{
