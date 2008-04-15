@@ -36,6 +36,7 @@
 			
 			private function initDb():void
 			{
+				em.debugLevel = 1;
 				var dbFile:File = File.userDirectory.resolvePath("ormtest_contacts.db");
 				newDb = !dbFile.exists;
 				var sqlConnection:SQLConnection = new SQLConnection();

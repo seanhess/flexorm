@@ -15,10 +15,12 @@ package ormtest.model
 		[Column(name="name")]
 		public var name:String;
 		
-		[ManyToOne]
+//		public var another:String;
+		
+		[ManyToOne(cascade="none")]
 		public var organisation:Organisation;
 		
-		[OneToMany(type="ormtest.model.Order", cascade="save-update")]
+		[OneToMany(type="ormtest.model.Order", cascade="save-update", constrain="false", lazy="true")]
 		public function set orders(value:IList):void
 		{
 			_orders = value;

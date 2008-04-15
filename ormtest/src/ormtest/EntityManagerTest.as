@@ -1,9 +1,13 @@
 package ormtest
 {
+	import flash.errors.SQLError;
+	import flash.events.Event;
+	
 	import flexunit.framework.TestCase;
 	import flexunit.framework.TestSuite;
 	
 	import mx.collections.ArrayCollection;
+	import mx.rpc.Responder;
 	
 	import nz.co.codec.flexorm.EntityManager;
 	import nz.co.codec.flexorm.IEntityManager;
@@ -13,7 +17,7 @@ package ormtest
 	import ormtest.model.Organisation;
 	import ormtest.model.Person;
 	import ormtest.model.Role;
-
+	
 	public class EntityManagerTest extends TestCase
 	{
 		private static var em:IEntityManager = EntityManager.instance;
@@ -31,6 +35,8 @@ package ormtest
 			ts.addTest(new EntityManagerTest("testCascadeSaveUpdate"));
 			ts.addTest(new EntityManagerTest("testInheritance1"));
 			ts.addTest(new EntityManagerTest("testInheritance2"));
+			ts.addTest(new EntityManagerTest("testTransaction"));
+			ts.addTest(new EntityManagerTest("testAlternateAPI"));
 			return ts;
 		}
 		
@@ -69,6 +75,8 @@ package ormtest
 			trace("=================================");
 			var organisation:Organisation = new Organisation();
 			organisation.name = "Apple";
+			// since Organisation has cascade="none" on Contact
+			em.save(organisation);
 			
 			var contact:Contact = new Contact();
 			contact.name = "Steve";
@@ -167,9 +175,17 @@ package ormtest
 			// verify that cascade save-update works
 			assertTrue(orderId > 0);
 			
+			// since the orders association is cascade="save-update" only
+//			for each(var o:Order in contact.orders)
+//			{
+//				em.remove(o);
+//			}
 			em.remove(contact);
 			
 			// verify that cascade delete is not in effect
+			
+			// !!! Yes, but foreign key constraint violation is
+			// so FK constraint has been swicthed off using constrain="false"
 			var loadedOrder:Order = em.loadItem(Order, orderId) as Order;
 			assertEquals(loadedOrder.item, "BMW");
 		}
@@ -200,6 +216,54 @@ package ormtest
 			
 			var loadedPerson:Person = em.loadItem(Person, contact.id) as Person;
 			assertEquals(loadedPerson.emailAddr, "bill@ms.com");
+		}
+		
+		public function testTransaction():void
+		{
+			trace("\nTest Transactions");
+			trace("=================");
+			var organisation:Organisation = new Organisation();
+			organisation.name = "Google";
+			em.save(organisation);
+			
+			var contact:Contact = new Contact();
+			contact.name = "Sergey";
+			contact.organisation = organisation;
+			em.save(contact);
+			
+			var success:Boolean;
+			var responder:Responder = new Responder(
+				function(event:Event):void
+				{
+					trace(event);
+					success = true;
+				},
+				function(error:SQLError):void
+				{
+					trace("transaction failed: " + error);
+					success = false;
+				});
+			
+			em.startTransaction(responder);
+			em.remove(organisation);
+			em.endTransaction();
+			
+			// The transaction is expected to fail with a
+			// foreign key constraint violation
+			assertEquals(success, false);
+		}
+		
+		public function testAlternateAPI():void
+		{
+			var c:Class = Organisation;
+			em.makePersistent(c);
+			
+			var organisation:Organisation = new Organisation();
+			organisation.name = "Datacom";
+			organisation.save();
+			
+			var loadedOrganisation:Organisation = em.loadItem(Organisation, organisation.id) as Organisation;
+			assertEquals(loadedOrganisation.name, "Datacom");
 		}
 		
 	}
