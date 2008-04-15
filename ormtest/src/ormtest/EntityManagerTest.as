@@ -255,8 +255,7 @@ package ormtest
 		
 		public function testAlternateAPI():void
 		{
-			var c:Class = Organisation;
-			em.makePersistent(c);
+			em.makePersistent(Organisation);
 			
 			var organisation:Organisation = new Organisation();
 			organisation.name = "Datacom";
