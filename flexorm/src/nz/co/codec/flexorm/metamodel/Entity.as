@@ -1,15 +1,17 @@
 package nz.co.codec.flexorm.metamodel
 {
 	import mx.collections.ArrayCollection;
+	import mx.core.IUID;
 	import mx.utils.StringUtil;
 	
+	import nz.co.codec.flexorm.command.CreateCommand;
 	import nz.co.codec.flexorm.command.DeleteCommand;
 	import nz.co.codec.flexorm.command.FindAllCommand;
 	import nz.co.codec.flexorm.command.InsertCommand;
 	import nz.co.codec.flexorm.command.SelectCommand;
 	import nz.co.codec.flexorm.command.UpdateCommand;
 	
-	public class Entity
+	public class Entity implements IUID
 	{
 		private var _cls:Class;
 		
@@ -31,6 +33,8 @@ package nz.co.codec.flexorm.metamodel
 		
 		private var _manyToManyInverseAssociations:ArrayCollection;
 		
+		private var _dependencies:ArrayCollection;
+		
 		public var superEntity:Entity;
 		
 		/**
@@ -48,6 +52,8 @@ package nz.co.codec.flexorm.metamodel
 		
 		public var deleteCommand:DeleteCommand;
 		
+		public var createCommand:CreateCommand;
+		
 		/**
 		 * flag to indicate whether the loading of metadata
 		 * for an entity has been completed
@@ -61,6 +67,13 @@ package nz.co.codec.flexorm.metamodel
 			_fkColumn = getFkColumn(_classname);
 			_table = _classname;
 			initialisationComplete = false;
+		}
+		
+		public function set uid(value:String):void { }
+		
+		public function get uid():String
+		{
+			return _classname;
 		}
 		
 		public function get cls():Class
@@ -239,6 +252,25 @@ package nz.co.codec.flexorm.metamodel
 			}
 			_manyToManyInverseAssociations.addItem(value);
 			value.ownerEntity = this;
+		}
+		
+		public function set dependencies(value:ArrayCollection):void
+		{
+			_dependencies = value;
+		}
+		
+		public function get dependencies():ArrayCollection
+		{
+			return _dependencies;
+		}
+		
+		public function addDependency(value:Entity):void
+		{
+			if (!_dependencies)
+			{
+				_dependencies = new ArrayCollection();
+			}
+			_dependencies.addItem(value);
 		}
 		
 		private function getClassName(c:Class):String

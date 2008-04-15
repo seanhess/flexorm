@@ -7,6 +7,8 @@ package nz.co.codec.flexorm.command
 	{
 		protected var _table:String;
 		
+		protected var _sqlConnection:SQLConnection;
+		
 		protected var _statement:SQLStatement;
 		
 		protected var changed:Boolean = false;
@@ -20,6 +22,7 @@ package nz.co.codec.flexorm.command
 		public function SQLCommand(table:String, sqlConnection:SQLConnection)
 		{
 			_table = table;
+			_sqlConnection = sqlConnection;
 			_statement = new SQLStatement();
 			_statement.sqlConnection = sqlConnection;
 		}
@@ -49,10 +52,7 @@ package nz.co.codec.flexorm.command
 			changed = true;
 		}
 		
-		protected function prepareStatement():void
-		{
-			
-		}
+		protected function prepareStatement():void { }
 		
 		public function set debugLevel(value:int):void
 		{

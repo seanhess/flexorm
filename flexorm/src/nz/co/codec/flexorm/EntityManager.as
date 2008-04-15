@@ -1,11 +1,14 @@
 package nz.co.codec.flexorm
 {
 	import flash.data.SQLConnection;
+	import flash.errors.SQLError;
+	import flash.events.Event;
 	import flash.filesystem.File;
 	import flash.utils.getDefinitionByName;
 	import flash.utils.getQualifiedClassName;
 	
 	import mx.collections.ArrayCollection;
+	import mx.rpc.IResponder;
 	
 	import nz.co.codec.flexorm.command.DeleteCommand;
 	import nz.co.codec.flexorm.command.FindAllCommand;
@@ -20,6 +23,8 @@ package nz.co.codec.flexorm
 	import nz.co.codec.flexorm.metamodel.Identity;
 	import nz.co.codec.flexorm.metamodel.ManyToManyAssociation;
 	import nz.co.codec.flexorm.metamodel.OneToManyAssociation;
+	import nz.co.codec.flexorm.util.Mixin;
+	import nz.co.codec.flexorm.util.PersistentEntity;
 	
 	public class EntityManager implements IEntityManager
 	{
@@ -53,6 +58,10 @@ package nz.co.codec.flexorm
 		private var _entityReflector:EntityReflector;
 		
 		private var _debugLevel:int = 0;
+		
+		private var inTransaction:Boolean = false;
+		
+		private var txResponder:IResponder;
 		
 		public function EntityManager()
 		{
@@ -102,8 +111,39 @@ package nz.co.codec.flexorm
 			return _debugLevel;
 		}
 		
+		public function startTransaction(responder:IResponder = null):void
+		{
+			txResponder = responder;
+			sqlConnection.begin();
+			inTransaction = true;
+		}
+		
+		public function endTransaction():void
+		{
+			if (inTransaction)
+			{
+				try
+				{
+					sqlConnection.commit();
+					inTransaction = false;
+					txResponder.result(new Event("successful transaction"));
+				}
+				catch (error:SQLError)
+				{
+					handleSQLError(error);
+				}
+			}
+		}
+		
+		public function makePersistent(c:Class):void
+		{
+			Mixin.extendClass(c, PersistentEntity);
+			c.myClass = c;
+		}
+		
 		public function findAll(c:Class):ArrayCollection
 		{
+			if (c is PersistentEntity) c = c.myClass;
 			var entity:Entity = map[c];
 			if (!entity || !entity.initialisationComplete)
 			{
@@ -114,8 +154,31 @@ package nz.co.codec.flexorm
 			return typeArray(command.result, c);
 		}
 		
+		public function loadOneToManyAssociation(a:OneToManyAssociation, id:int):ArrayCollection
+		{
+			var c:Class = a.associatedEntity.cls;
+			var entity:Entity = map[c];
+			if (!entity || !entity.initialisationComplete)
+			{
+				entity = entityReflector.loadMetadata(c);
+			}
+			return selectOneToManyAssociation(a.column, c, a.selectCommand, id);
+		}
+		
+		public function loadManyToManyAssociation(a:ManyToManyAssociation, id:int):ArrayCollection
+		{
+			var c:Class = a.associatedEntity.cls;
+			var entity:Entity = map[c];
+			if (!entity || !entity.initialisationComplete)
+			{
+				entity = entityReflector.loadMetadata(c);
+			}
+			return selectManyToManyAssociation(a.column, c, a.selectCommand, id);
+		}
+		
 		public function loadItem(c:Class, id:int):Object
 		{
+			if (c is PersistentEntity) c = c.myClass;
 			var entity:Entity = map[c];
 			if (!entity || !entity.initialisationComplete)
 			{
@@ -130,13 +193,31 @@ package nz.co.codec.flexorm
 		
 		public function save(o:Object):void
 		{
-			saveInternal(o);
+			// if not already part of a user-defined transaction, then
+			// start one to group all cascade save-update operations
+			if (!inTransaction) sqlConnection.begin();
+			try {
+				saveInternal(o);
+				if (!inTransaction) sqlConnection.commit();
+			}
+			catch (error:SQLError)
+			{
+				handleSQLError(error);
+			}
 		}
 		
 		private function saveInternal(o:Object, join:Object = null, mtmInsertCommand:InsertCommand = null):void
 		{
 			if (o == null) return;
-			var c:Class = Class(getDefinitionByName(getQualifiedClassName(o)));
+			var c:Class = null;
+			if (o is PersistentEntity)
+			{
+				c = o.myClass;
+			}
+			else
+			{
+				c = Class(getDefinitionByName(getQualifiedClassName(o)));
+			}
 			var entity:Entity = map[c];
 			if (!entity || !entity.initialisationComplete)
 			{
@@ -144,9 +225,8 @@ package nz.co.codec.flexorm
 			}
 			var identity:Identity = entity.identity;
 			var column:String = entity.fkColumn; // FK of this class c
-			var a:Association = null;
 			
-			for each(a in entity.manyToOneAssociations)
+			for each(var a:Association in entity.manyToOneAssociations)
 			{
 				if (!a.inverse &&
 					(a.cascadeType == CascadeType.SAVE_UPDATE || a.cascadeType == CascadeType.ALL) &&
@@ -169,11 +249,15 @@ package nz.co.codec.flexorm
 			// must place here to get updated id for created items
 			id = o[identity.property];
 			
-			for each(a in entity.oneToManyAssociations)
+			for each(var otmAssoc:OneToManyAssociation in entity.oneToManyAssociations)
 			{
-				if (a.cascadeType == CascadeType.SAVE_UPDATE || a.cascadeType == CascadeType.ALL)
+				if ((otmAssoc.cascadeType == CascadeType.SAVE_UPDATE || otmAssoc.cascadeType == CascadeType.ALL) &&
+					(!otmAssoc.lazy ||
+						(o[otmAssoc.property] &&
+							(!(o[otmAssoc.property] is LazyList) ||
+							(o[otmAssoc.property] is LazyList && LazyList(o[otmAssoc.property]).loaded)))))
 				{
-					for each(var otmItem:Object in o[a.property])
+					for each(var otmItem:Object in o[otmAssoc.property])
 					{
 						saveInternal(otmItem, { column: column, id: id });
 					}
@@ -182,57 +266,63 @@ package nz.co.codec.flexorm
 			
 			for each(var mtmAssoc:ManyToManyAssociation in entity.manyToManyAssociations)
 			{
-				var selectIndicesCommand:SelectManyToManyIndicesCommand = mtmAssoc.selectIndicesCommand;
-				selectIndicesCommand.setParam(column, id);
-				selectIndicesCommand.execute();
-				
-				var preIndices:Array = new Array();
-				
-				for each(var row:Object in selectIndicesCommand.result)
+				if (!mtmAssoc.lazy ||
+						(o[mtmAssoc.property] &&
+							(!(o[mtmAssoc.property] is LazyList) ||
+							(o[mtmAssoc.property] is LazyList && LazyList(o[mtmAssoc.property]).loaded))))
 				{
-					preIndices.push(row[mtmAssoc.joinColumn]);
-				}
-				
-				var idProperty:String = mtmAssoc.associatedEntity.identity.property;
-				
-				for each(var mtmItem:Object in o[mtmAssoc.property])
-				{
-					var mtmItemId:int = mtmItem[idProperty];
-					var idx:int = preIndices.indexOf(mtmItemId);
-					if (idx > -1)
+					var selectIndicesCommand:SelectManyToManyIndicesCommand = mtmAssoc.selectIndicesCommand;
+					selectIndicesCommand.setParam(column, id);
+					selectIndicesCommand.execute();
+					
+					var preIndices:Array = [];
+					
+					for each(var row:Object in selectIndicesCommand.result)
 					{
-						// no need to update associationTable
-						if (mtmAssoc.cascadeType == CascadeType.SAVE_UPDATE || mtmAssoc.cascadeType == CascadeType.ALL)
-						{
-							saveInternal(mtmItem, { column: column, id: id });
-						}
-						preIndices.splice(idx, 1);
+						preIndices.push(row[mtmAssoc.joinColumn]);
 					}
-					else
+					
+					var idProperty:String = mtmAssoc.associatedEntity.identity.property;
+					
+					for each(var mtmItem:Object in o[mtmAssoc.property])
 					{
-						var insertCommand:InsertCommand = mtmAssoc.insertCommand;
-						
-						// insert link in associationTable
-						if (mtmAssoc.cascadeType == CascadeType.SAVE_UPDATE || mtmAssoc.cascadeType == CascadeType.ALL)
+						var mtmItemId:int = mtmItem[idProperty];
+						var idx:int = preIndices.indexOf(mtmItemId);
+						if (idx > -1)
 						{
-							saveInternal(mtmItem, { column: column, id: id }, insertCommand);
+							// no need to update associationTable
+							if (mtmAssoc.cascadeType == CascadeType.SAVE_UPDATE || mtmAssoc.cascadeType == CascadeType.ALL)
+							{
+								saveInternal(mtmItem, { column: column, id: id });
+							}
+							preIndices.splice(idx, 1);
 						}
-						else // just create the link instead
+						else
 						{
-							insertCommand.setParam(mtmAssoc.joinColumn, mtmItemId);
-							insertCommand.setParam(column, id);
-							insertCommand.execute();
+							var insertCommand:InsertCommand = mtmAssoc.insertCommand;
+							
+							// insert link in associationTable
+							if (mtmAssoc.cascadeType == CascadeType.SAVE_UPDATE || mtmAssoc.cascadeType == CascadeType.ALL)
+							{
+								saveInternal(mtmItem, { column: column, id: id }, insertCommand);
+							}
+							else // just create the link instead
+							{
+								insertCommand.setParam(mtmAssoc.joinColumn, mtmItemId);
+								insertCommand.setParam(column, id);
+								insertCommand.execute();
+							}
 						}
 					}
-				}
-				// for each pre index left
-				for each(var i:int in preIndices)
-				{
-					// delete link from associationTable
-					var deleteCommand:DeleteCommand = mtmAssoc.deleteCommand;
-					deleteCommand.setParam(column, id);
-					deleteCommand.setParam(mtmAssoc.joinColumn, i);
-					deleteCommand.execute();
+					// for each pre index left
+					for each(var i:int in preIndices)
+					{
+						// delete link from associationTable
+						var deleteCommand:DeleteCommand = mtmAssoc.deleteCommand;
+						deleteCommand.setParam(column, id);
+						deleteCommand.setParam(mtmAssoc.joinColumn, i);
+						deleteCommand.execute();
+					}
 				}
 			}
 		}
@@ -367,43 +457,71 @@ package nz.co.codec.flexorm
 			{
 				entity = entityReflector.loadMetadata(c);
 			}
-			var a:Association = null;
-			for each(a in entity.oneToManyAssociations)
-			{
-				if (a.cascadeType == CascadeType.DELETE || a.cascadeType == CascadeType.ALL)
+			// if not already part of a user-defined transaction,
+			// then start one to group all cascade delete operations
+			if (!inTransaction) sqlConnection.begin();
+			try {
+				var a:Association = null;
+				for each(a in entity.oneToManyAssociations)
 				{
-					for each(var item:Object in o[a.property])
+					if (a.cascadeType == CascadeType.DELETE || a.cascadeType == CascadeType.ALL)
 					{
-						remove(item);
+						for each(var item:Object in o[a.property])
+						{
+							remove(item);
+						}
 					}
 				}
-			}
-			
-			// Doesn't make sense to support cascade delete on many-to-many associations
-			
-			var command:DeleteCommand = entity.deleteCommand;
-			var identity:Identity = entity.identity;
-			command.setParam(identity.property, o[identity.property]);
-			command.execute();
-			
-			var superEntity:Entity = entity.superEntity;
-			if (superEntity)
-			{
-				var superDeleteCommand:DeleteCommand = superEntity.deleteCommand;
-				superDeleteCommand.setParam(superEntity.identity.property, o[identity.property]);
-				superDeleteCommand.execute();
-			}
-			
-			for each(a in entity.manyToOneAssociations)
-			{
-				if (o[a.property] &&
-					(a.cascadeType == CascadeType.DELETE || a.cascadeType == CascadeType.ALL))
+				
+				// Doesn't make sense to support cascade delete on many-to-many associations
+				
+				var command:DeleteCommand = entity.deleteCommand;
+				var identity:Identity = entity.identity;
+				command.setParam(identity.property, o[identity.property]);
+				command.execute();
+				
+				var superEntity:Entity = entity.superEntity;
+				if (superEntity)
 				{
-					remove(o[a.property]);
+					var superDeleteCommand:DeleteCommand = superEntity.deleteCommand;
+					superDeleteCommand.setParam(superEntity.identity.property, o[identity.property]);
+					superDeleteCommand.execute();
 				}
+				
+				for each(a in entity.manyToOneAssociations)
+				{
+					if (o[a.property] &&
+						(a.cascadeType == CascadeType.DELETE || a.cascadeType == CascadeType.ALL))
+					{
+						remove(o[a.property]);
+					}
+				}
+				if (!inTransaction) sqlConnection.commit();
+			}
+			catch (error:SQLError)
+			{
+				handleSQLError(error);
 			}
 		}
 		
+		private function handleSQLError(error:SQLError):void
+		{
+			if (_debugLevel > 0)
+			{
+				trace(error);
+			}
+			
+			// check if transaction is still open, since a foreign key
+			// constraint trigger will force a rollback, which closes
+			// the transaction
+			if (sqlConnection.inTransaction) sqlConnection.rollback();
+			inTransaction = false;
+			txResponder.fault(error);
+		}
+		
+		// TODO: consider whether to return an empty collection instead of null
+		// I think I chose to return null to set empty list associations as null
+		// on the owner entity
 		private function typeArray(a:Array, c:Class):ArrayCollection
 		{
 			if (!a) return null;
@@ -471,11 +589,25 @@ package nz.co.codec.flexorm
 			}
 			for each(var otmAssoc:OneToManyAssociation in entity.oneToManyAssociations)
 			{
-				instance[otmAssoc.property] = selectOneToManyAssociation(otmAssoc.column, otmAssoc.associatedEntity.cls, otmAssoc.selectCommand, o[entity.identity.property]);
+				if (otmAssoc.lazy)
+				{
+					instance[otmAssoc.property] = new LazyList(this, otmAssoc, o[entity.identity.property]);
+				}
+				else
+				{
+					instance[otmAssoc.property] = selectOneToManyAssociation(otmAssoc.column, otmAssoc.associatedEntity.cls, otmAssoc.selectCommand, o[entity.identity.property]);
+				}
 			}
 			for each(var mtmAssoc:ManyToManyAssociation in entity.manyToManyAssociations)
 			{
-				instance[mtmAssoc.property] = selectManyToManyAssociation(mtmAssoc.column, mtmAssoc.associatedEntity.cls, mtmAssoc.selectCommand, o[entity.identity.property]);
+				if (mtmAssoc.lazy)
+				{
+					instance[mtmAssoc.property] = new LazyList(this, mtmAssoc, o[entity.identity.property]);
+				}
+				else
+				{
+					instance[mtmAssoc.property] = selectManyToManyAssociation(mtmAssoc.column, mtmAssoc.associatedEntity.cls, mtmAssoc.selectCommand, o[entity.identity.property]);
+				}
 			}
 			return instance;
 		}

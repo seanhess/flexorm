@@ -1,11 +1,12 @@
 package nz.co.codec.flexorm.metamodel
 {
+	import nz.co.codec.flexorm.command.CreateCommand;
 	import nz.co.codec.flexorm.command.DeleteCommand;
 	import nz.co.codec.flexorm.command.InsertCommand;
 	import nz.co.codec.flexorm.command.SelectManyToManyCommand;
 	import nz.co.codec.flexorm.command.SelectManyToManyIndicesCommand;
 	
-	public class ManyToManyAssociation extends Association
+	public class ManyToManyAssociation extends Association implements IListAssociation
 	{
 		private var _associationTable:String;
 		
@@ -15,12 +16,9 @@ package nz.co.codec.flexorm.metamodel
 		 */
 		public var joinColumn:String;
 		
-		/**
-		 * an instance of SelectOneToManyCommand to select the associated
-		 * entities using the id value of the owning entity as a parameter
-		 * to the FK in the 'where clause'
-		 */
-		public var selectCommand:SelectManyToManyCommand;
+		public var lazy:Boolean = false;
+		
+		private var _selectCommand:SelectManyToManyCommand;
 		
 		/**
 		 * an instance of SelectManyToManyIndicesCommand to select
@@ -40,6 +38,8 @@ package nz.co.codec.flexorm.metamodel
 		 * (not the associated entity)
 		 */
 		public var deleteCommand:DeleteCommand;
+		
+		public var createCommand:CreateCommand;
 		
 		public function ManyToManyAssociation(hash:Object = null)
 		{
@@ -61,6 +61,21 @@ package nz.co.codec.flexorm.metamodel
 				_associationTable = ownerEntity.classname + "_" + associatedEntity.classname;
 			}
 			return _associationTable;
+		}
+		
+		/**
+		 * an instance of SelectOneToManyCommand to select the associated
+		 * entities using the id value of the owning entity as a parameter
+		 * to the FK in the 'where clause'
+		 */
+		public function set selectCommand(value:SelectManyToManyCommand):void
+		{
+			_selectCommand = value;
+		}
+		
+		public function get selectCommand():SelectManyToManyCommand
+		{
+			return _selectCommand;
 		}
 
 	}

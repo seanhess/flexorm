@@ -11,23 +11,9 @@ package nz.co.codec.flexorm.metamodel
 		 */
 		public var property:String;
 		
-		/**
-		 * database column name of FK in table of associated
-		 * entity (= class name of owning entity + 'Id', e.g.
-		 * 'contactId'),
-		 * 
-		 * or,
-		 * 
-		 * in the case of a many-to-many association, the
-		 * database column name of the FK in the association
-		 * table which links to the owner entity
-		 */
-		public var column:String;
+		private var _column:String;
 		
-		/**
-		 * Entity definition of class of associated object
-		 */
-		public var associatedEntity:Entity;
+		private var _associatedEntity:Entity;
 		
 		/**
 		 * true or false if this association is the inverse
@@ -38,6 +24,8 @@ package nz.co.codec.flexorm.metamodel
 		public var ownerEntity:Entity;
 		
 		private var _cascadeType:String;
+		
+		public var constrain:Boolean;
 		
 		public function Association(hash:Object = null)
 		{
@@ -50,6 +38,40 @@ package nz.co.codec.flexorm.metamodel
 					this[key] = hash[key];
 				}
 			}
+		}
+		
+		/**
+		 * database column name of FK in table of associated
+		 * entity (= class name of owning entity + 'Id', e.g.
+		 * 'contactId'),
+		 * 
+		 * or,
+		 * 
+		 * in the case of a many-to-many association, the
+		 * database column name of the FK in the association
+		 * table which links to the owner entity
+		 */
+		public function set column(value:String):void
+		{
+			_column = value;
+		}
+		
+		public function get column():String
+		{
+			return _column;
+		}
+		
+		/**
+		 * Entity definition of class of associated object
+		 */
+		public function set associatedEntity(value:Entity):void
+		{
+			_associatedEntity = value;
+		}
+		
+		public function get associatedEntity():Entity
+		{
+			return _associatedEntity;
 		}
 		
 		/**

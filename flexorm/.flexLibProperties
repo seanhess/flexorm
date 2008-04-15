@@ -1,26 +1,27 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <flexLibProperties version="1">
 <includeClasses>
-<classEntry path="nz.co.codec.flexorm.CascadeType"/>
-<classEntry path="nz.co.codec.flexorm.EntityManager"/>
+<classEntry path="nz.co.codec.flexorm.metamodel.Identity"/>
+<classEntry path="nz.co.codec.flexorm.metamodel.Association"/>
+<classEntry path="nz.co.codec.flexorm.metamodel.ManyToManyAssociation"/>
+<classEntry path="nz.co.codec.flexorm.metamodel.Entity"/>
+<classEntry path="nz.co.codec.flexorm.command.SQLParameterisedCommand"/>
+<classEntry path="nz.co.codec.flexorm.command.SelectManyToManyIndicesCommand"/>
+<classEntry path="nz.co.codec.flexorm.metamodel.Field"/>
 <classEntry path="nz.co.codec.flexorm.EntityReflector"/>
-<classEntry path="nz.co.codec.flexorm.IEntityManager"/>
-<classEntry path="nz.co.codec.flexorm.command.CreateCommand"/>
+<classEntry path="nz.co.codec.flexorm.EntityManager"/>
 <classEntry path="nz.co.codec.flexorm.command.DeleteCommand"/>
+<classEntry path="nz.co.codec.flexorm.LazyList"/>
+<classEntry path="nz.co.codec.flexorm.command.SQLCommand"/>
+<classEntry path="nz.co.codec.flexorm.command.CreateCommand"/>
+<classEntry path="nz.co.codec.flexorm.command.SelectCommand"/>
 <classEntry path="nz.co.codec.flexorm.command.FindAllCommand"/>
 <classEntry path="nz.co.codec.flexorm.command.InsertCommand"/>
-<classEntry path="nz.co.codec.flexorm.command.SQLCommand"/>
-<classEntry path="nz.co.codec.flexorm.command.SQLParameterisedCommand"/>
-<classEntry path="nz.co.codec.flexorm.command.SelectCommand"/>
-<classEntry path="nz.co.codec.flexorm.command.SelectManyToManyCommand"/>
-<classEntry path="nz.co.codec.flexorm.command.SelectManyToManyIndicesCommand"/>
-<classEntry path="nz.co.codec.flexorm.command.UpdateCommand"/>
-<classEntry path="nz.co.codec.flexorm.metamodel.Association"/>
-<classEntry path="nz.co.codec.flexorm.metamodel.Entity"/>
-<classEntry path="nz.co.codec.flexorm.metamodel.Field"/>
-<classEntry path="nz.co.codec.flexorm.metamodel.Identity"/>
-<classEntry path="nz.co.codec.flexorm.metamodel.ManyToManyAssociation"/>
+<classEntry path="nz.co.codec.flexorm.IEntityManager"/>
 <classEntry path="nz.co.codec.flexorm.metamodel.OneToManyAssociation"/>
+<classEntry path="nz.co.codec.flexorm.CascadeType"/>
+<classEntry path="nz.co.codec.flexorm.command.UpdateCommand"/>
+<classEntry path="nz.co.codec.flexorm.command.SelectManyToManyCommand"/>
 </includeClasses>
 <includeResources/>
 <namespaceManifests/>

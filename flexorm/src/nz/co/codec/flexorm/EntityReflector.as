@@ -4,6 +4,8 @@ package nz.co.codec.flexorm
 	import flash.utils.describeType;
 	import flash.utils.getDefinitionByName;
 	
+	import mx.utils.StringUtil;
+	
 	import nz.co.codec.flexorm.command.CreateCommand;
 	import nz.co.codec.flexorm.command.DeleteCommand;
 	import nz.co.codec.flexorm.command.FindAllCommand;
@@ -27,16 +29,13 @@ package nz.co.codec.flexorm
 		
 		private var deferred:Array;
 		
-		private var buildSQLQueue:Array;
-		
 		private var _debugLevel:int = 0;
 		
 		public function EntityReflector(map:Object, sqlConnection:SQLConnection)
 		{
 			this.map = map;
 			this.sqlConnection = sqlConnection;
-			deferred = new Array();
-			buildSQLQueue = new Array();
+			deferred = [];
 		}
 		
 		public function set debugLevel(value:int):void
@@ -52,18 +51,74 @@ package nz.co.codec.flexorm
 		internal function loadMetadata(c:Class):Entity
 		{
 			var entity:Entity = loadMetadataForClass(c);
-			
+			var entities:Array = [];
+			entities.push(entity);
 			while (deferred.length > 0)
 			{
-				loadMetadataForClass(deferred.pop());
+				entities.push(loadMetadataForClass(deferred.pop()));
 			}
-			
-			while (buildSQLQueue.length > 0)
-			{
-				buildSQLCommands(buildSQLQueue.pop());
-			}
+			buildSQL(entities);
+			createTables(sequenceEntitiesForTableCreation(entities));
 			
 			return entity;
+		}
+		
+		private function buildSQL(entities:Array):void
+		{
+			for each(var entity:Entity in entities)
+			{
+				buildSQLCommands(entity);
+			}
+		}
+		
+		private function createTables(createSequence:Array):void
+		{
+			var associationTableCreateCommands:Array = [];
+			for each(var entity:Entity in createSequence)
+			{
+				entity.createCommand.execute();
+				for each(var a:ManyToManyAssociation in entity.manyToManyAssociations)
+				{
+					associationTableCreateCommands.push(a.createCommand);
+				}
+			}
+			// create association tables last
+			for each(var command:CreateCommand in associationTableCreateCommands)
+			{
+				command.execute();
+			}
+		}
+		
+		/**
+		 * Sequence entities so that foreign key constraints are not violated
+		 * as table are created.
+		 */
+		private function sequenceEntitiesForTableCreation(entities:Array):Array
+		{
+			var createSequence:Array = [].concat(entities);
+			for each(var entity:Entity in entities)
+			{
+				var i:int = createSequence.indexOf(entity);
+				var k:int = 0;
+				for each(var e:Entity in entity.dependencies)
+				{
+					var j:int = createSequence.indexOf(e) + 1;
+					k = (j > k) ? j : k;
+				}
+				if (k != i)
+				{
+					createSequence.splice(k, 0, entity);
+					if (k < i)
+					{
+						createSequence.splice(i + 1, 1);
+					}
+					else
+					{
+						createSequence.splice(i, 1);
+					}
+				}
+			}
+			return createSequence;
 		}
 		
 		private function loadMetadataForClass(c:Class):Entity
@@ -90,6 +145,7 @@ package nz.co.codec.flexorm
 					deferred.push(superClass);
 				}
 				entity.superEntity = superEntity;
+				entity.addDependency(superEntity);
 			}
 			
 			var variables:XMLList = xml.accessor;
@@ -107,6 +163,9 @@ package nz.co.codec.flexorm
 				var type:Class = null; // associated object class
 				var associatedEntity:Entity = null;
 				var cascadeType:String = null;
+				var lazy:Boolean = false;
+				var constrain:Boolean = true;
+				var metadata:XMLList = null;
 				
 				if (v.metadata.(@name == "Column").length() > 0)
 				{
@@ -116,10 +175,12 @@ package nz.co.codec.flexorm
 				
 				else if (v.metadata.(@name == "ManyToOne").length() > 0)
 				{
+					metadata = v.metadata.(@name == "ManyToOne");
 					column = property + "Id";
 					type = getClass(v.@type);
-					cascadeType = v.metadata.(@name == "OneToMany").arg.(@key == "cascade").@value;
-					var inverse:Boolean = Boolean(v.metadata.(@name == "ManyToOne").arg.(@key == "inverse").@value.toString());
+					cascadeType = metadata.arg.(@key == "cascade").@value;
+					constrain = parseBoolean(metadata.arg.(@key == "constrain").@value.toString(), true);
+					var inverse:Boolean = parseBoolean(metadata.arg.(@key == "inverse").@value.toString(), false);
 					associatedEntity = map[type];
 					if (!associatedEntity)
 					{
@@ -132,79 +193,70 @@ package nz.co.codec.flexorm
 						column: column,
 						associatedEntity: associatedEntity,
 						inverse: inverse,
-						cascadeType: cascadeType
+						cascadeType: cascadeType,
+						constrain: constrain
 					}));
+					entity.addDependency(associatedEntity);
 				}
 				
 				else if (v.metadata.(@name == "OneToMany").length() > 0)
 				{
+					metadata = v.metadata.(@name == "OneToMany");
 					column = entity.fkColumn;
-					type = getClass(v.metadata.(@name == "OneToMany").arg.(@key == "type").@value);
-					cascadeType = v.metadata.(@name == "OneToMany").arg.(@key == "cascade").@value;
+					type = getClass(metadata.arg.(@key == "type").@value);
+					cascadeType = metadata.arg.(@key == "cascade").@value;
+					lazy = parseBoolean(metadata.arg.(@key == "lazy").@value.toString(), false);
+					constrain = parseBoolean(metadata.arg.(@key == "constrain").@value.toString(), true);
 					associatedEntity = map[type];
-					var otmAssociation:OneToManyAssociation = null;
-					if (associatedEntity)
-					{
-						otmAssociation = new OneToManyAssociation({
-							property: property,
-							column: column,
-							associatedEntity: associatedEntity,
-							cascadeType: cascadeType
-						});
-					}
-					else
+					if (!associatedEntity)
 					{
 						associatedEntity = new Entity(type);
 						map[type] = associatedEntity;
 						deferred.push(type);
-						otmAssociation = new OneToManyAssociation({
-							property: property,
-							column: column,
-							associatedEntity: associatedEntity,
-							cascadeType: cascadeType
-						});
 					}
+					var otmAssociation:OneToManyAssociation = new OneToManyAssociation({
+						property: property,
+						column: column,
+						associatedEntity: associatedEntity,
+						cascadeType: cascadeType,
+						lazy: lazy,
+						constrain: constrain
+					});
 					associatedEntity.addOneToManyInverseAssociation(otmAssociation);
 					entity.addOneToManyAssociation(otmAssociation);
+					associatedEntity.addDependency(entity);
 				}
 				
 				else if (v.metadata.(@name == "ManyToMany").length() > 0)
 				{
+					metadata = v.metadata.(@name == "ManyToMany");
 					column = entity.fkColumn;
-					cascadeType = v.metadata.(@name == "ManyToMany").arg.(@key == "cascade").@value;
-					type = getClass(v.metadata.(@name == "ManyToMany").arg.(@key == "type").@value);
+					cascadeType = metadata.arg.(@key == "cascade").@value;
+					lazy = parseBoolean(metadata.arg.(@key == "lazy").@value.toString(), false);
+					constrain = parseBoolean(metadata.arg.(@key == "constrain").@value.toString(), true);
+					type = getClass(metadata.arg.(@key == "type").@value);
 					var associationTable:String = entity.classname + "_" + getClassName(type);
-					associatedEntity = map[type];
 					var joinColumn:String = getFkColumn(type);
-					var mtmAssociation:ManyToManyAssociation = null;
-					
-					if (associatedEntity)
-					{
-						mtmAssociation = new ManyToManyAssociation({
-							property: property,
-							column: column,
-							associationTable: associationTable,
-							joinColumn: joinColumn,
-							associatedEntity: associatedEntity,
-							cascadeType: cascadeType
-						});
-					}
-					else
+					associatedEntity = map[type];
+					if (!associatedEntity)
 					{
 						associatedEntity = new Entity(type);
 						map[type] = associatedEntity;
 						deferred.push(type);
-						mtmAssociation = new ManyToManyAssociation({
-							property: property,
-							column: column,
-							associationTable: associationTable,
-							joinColumn: joinColumn,
-							associatedEntity: associatedEntity,
-							cascadeType: cascadeType
-						});
 					}
+					var mtmAssociation:ManyToManyAssociation = new ManyToManyAssociation({
+						property: property,
+						column: column,
+						associationTable: associationTable,
+						joinColumn: joinColumn,
+						associatedEntity: associatedEntity,
+						cascadeType: cascadeType,
+						lazy: lazy,
+						constrain: constrain
+					});
 					associatedEntity.addManyToManyInverseAssociation(mtmAssociation);
 					entity.addManyToManyAssociation(mtmAssociation);
+					associatedEntity.addDependency(entity);
 				}
 				
 				else if (v.metadata.(@name == "Transient").length() > 0)
@@ -224,8 +276,26 @@ package nz.co.codec.flexorm
 				}
 			}
 			entity.initialisationComplete = true;
-			buildSQLQueue.push(entity);
 			return entity;
+		}
+		
+		private function parseBoolean(str:String, defaultValue:Boolean):Boolean
+		{
+			if (!str) return defaultValue;
+			switch (StringUtil.trim(str))
+			{
+				case "":
+					return defaultValue;
+					break;
+				case "true":
+					return true;
+					break;
+				case "false":
+					return false;
+					break;
+				default:
+					throw new Error("Cannot parse Boolean from '" + str + "'");
+			}
 		}
 		
 		private function buildSQLCommands(entity:Entity):void
@@ -276,7 +346,14 @@ package nz.co.codec.flexorm
 			{
 				insertCommand.addColumn(a.column, a.column);
 				updateCommand.addColumn(a.column, a.column);
-				createCommand.addColumn(a.column, "integer");
+				if (a.constrain)
+				{
+					createCommand.addFkColumn(a.column, "integer", a.associatedEntity.table, a.associatedEntity.identity.column);
+				}
+				else
+				{
+					createCommand.addColumn(a.column, "integer");
+				}
 			}
 			
 			var otmAssoc:OneToManyAssociation = null;
@@ -291,7 +368,14 @@ package nz.co.codec.flexorm
 			{
 				insertCommand.addColumn(otmAssoc.column, otmAssoc.column);
 				updateCommand.addColumn(otmAssoc.column, otmAssoc.column);
-				createCommand.addColumn(otmAssoc.column, "integer");
+				if (otmAssoc.constrain)
+				{
+					createCommand.addFkColumn(otmAssoc.column, "integer", otmAssoc.ownerEntity.table, otmAssoc.ownerEntity.identity.column);
+				}
+				else
+				{
+					createCommand.addColumn(otmAssoc.column, "integer");
+				}
 			}
 			
 			var mtmAssoc:ManyToManyAssociation = null;
@@ -327,18 +411,27 @@ package nz.co.codec.flexorm
 				
 				var mtmCreateCommand:CreateCommand = new CreateCommand(associationTable, sqlConnection);
 				mtmCreateCommand.debugLevel = _debugLevel;
-				mtmCreateCommand.addColumn(column, "integer"); // column is entity.fkColumn
-				mtmCreateCommand.addColumn(associatedEntity.fkColumn, "integer");
-				mtmCreateCommand.execute();
+				
+				// column is entity.fkColumn
+				if (mtmAssoc.constrain)
+				{
+					mtmCreateCommand.addFkColumn(column, "integer", entity.table, identity.column);
+					mtmCreateCommand.addFkColumn(associatedEntity.fkColumn, "integer",
+						associatedEntity.table, associatedEntity.identity.column);
+				}
+				else
+				{
+					mtmCreateCommand.addColumn(column, "integer");
+					mtmCreateCommand.addColumn(associatedEntity.fkColumn, "integer");
+				}
+				mtmAssoc.createCommand = mtmCreateCommand;
 			}
 			entity.findAllCommand = findAllCommand;
 			entity.selectCommand = selectCommand;
 			entity.insertCommand = insertCommand;
 			entity.updateCommand = updateCommand;
 			entity.deleteCommand = deleteCommand;
-			
-			// create database schema for entity
-			createCommand.execute();
+			entity.createCommand = createCommand;
 		}
 		
 		private function getClass(asType:String):Class

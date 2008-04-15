@@ -31,7 +31,10 @@ package nz.co.codec.flexorm.command
 		override public function execute():void
 		{
 			super.execute();
-			_lastInsertRowID = _statement.getResult().lastInsertRowID;
+			_lastInsertRowID = _sqlConnection.lastInsertRowID;
+			
+			// the foreign key constraint triggers appear to be screwing with this
+			//_lastInsertRowID = _statement.getResult().lastInsertRowID;
 		}
 		
 		public function get lastInsertRowID():int
