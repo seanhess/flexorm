@@ -2,16 +2,25 @@ package nz.co.codec.flexorm.command
 {
     import flash.data.SQLConnection;
 
-    public class DeleteCommand extends SQLParameterisedCommand
+    public class MarkForDeletionCommand extends SQLParameterisedCommand
     {
-        public function DeleteCommand(table:String, sqlConnection:SQLConnection, debugLevel:int=0)
+        public function MarkForDeletionCommand(table:String, sqlConnection:SQLConnection, debugLevel:int=0)
         {
             super(table, sqlConnection, debugLevel);
         }
 
+        public function clone():MarkForDeletionCommand
+        {
+            var copy:MarkForDeletionCommand = new MarkForDeletionCommand(_table, _sqlConnection);
+            copy.filters = _filters;
+            copy.debugLevel = _debugLevel;
+            return copy;
+        }
+
         override protected function prepareStatement():void
         {
-            var sql:String = "delete from " + _table;
+            var sql:String = "update " + _table +
+                " set marked_for_deletion=true";
             if (_filters)
             {
                 sql += " where ";
@@ -28,7 +37,7 @@ package nz.co.codec.flexorm.command
 
         public function toString():String
         {
-            return "DELETE " + _table + ": " + _statement.text;
+            return "MARK FOR DELETION " + _table + ": " + _statement.text;
         }
 
     }

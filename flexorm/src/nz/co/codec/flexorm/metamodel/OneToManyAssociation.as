@@ -1,33 +1,25 @@
 package nz.co.codec.flexorm.metamodel
 {
-	import nz.co.codec.flexorm.command.SelectCommand;
-	
-	public class OneToManyAssociation extends Association implements IListAssociation
-	{
-		private var _selectCommand:SelectCommand;
-		
-		public var lazy:Boolean = false;
-		
-		public function OneToManyAssociation(hash:Object = null)
-		{
-			super(hash);
-		}
-		
-		/**
-		 * an instance of SelectOneToManyCommand to select
-		 * the associated entities using the id value of the
-		 * owning entity as a parameter to the FK in the
-		 * 'where clause'
-		 */
-		public function set selectCommand(value:SelectCommand):void
-		{
-			_selectCommand = value;
-		}
-		
-		public function get selectCommand():SelectCommand
-		{
-			return _selectCommand;
-		}
-		
-	}
+    import nz.co.codec.flexorm.command.SelectCommand;
+
+    public class OneToManyAssociation extends ListAssociation
+    {
+
+        /**
+         * An instance of SelectCommand to select the associated entities
+         * using the keys of the owning entity as parameters to the FKs
+         * in the 'where clause'.
+         */
+        public var selectCommand:SelectCommand;
+
+        public var fkColumn:String;
+
+        public var fkProperty:String;
+
+        public function OneToManyAssociation(hash:Object=null)
+        {
+            super(hash);
+        }
+
+    }
 }

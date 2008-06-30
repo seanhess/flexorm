@@ -1,42 +1,49 @@
 package nz.co.codec.flexorm.command
 {
-	import flash.data.SQLConnection;
-	import flash.data.SQLStatement;
-	
-	public class UpdateCommand extends SQLParameterisedCommand
-	{
-		public function UpdateCommand(table:String, sqlConnection:SQLConnection)
-		{
-			super(table, sqlConnection);
-			changed = true;
-		}
-		
-		override protected function prepareStatement():void
-		{
-			var updateSQL:String = "update " + _table + " set ";
-			for (var column:String in columns)
-			{
-				updateSQL += column + "=" + columns[column] + ",";
-			}
-			updateSQL = updateSQL.substring(0, updateSQL.length - 1);
-			if (filters)
-			{
-				updateSQL += " where ";
-				for (var col:String in filters)
-				{
-					updateSQL += col + "=" + filters[col] + " and ";
-				}
-				// remove last ' and '
-				updateSQL = updateSQL.substring(0, updateSQL.length - 5);
-			}
-			_statement.text = updateSQL;
-			changed = false;
-		}
-		
-		public function toString():String
-		{
-			return "UPDATE " + _table + ": " + _statement.text;
-		}
+    import flash.data.SQLConnection;
 
-	}
+    public class UpdateCommand extends SQLParameterisedCommand
+    {
+        public function UpdateCommand(table:String, sqlConnection:SQLConnection, debugLevel:int=0)
+        {
+            super(table, sqlConnection, debugLevel);
+        }
+
+        public function clone():UpdateCommand
+        {
+            var copy:UpdateCommand = new UpdateCommand(_table, _sqlConnection);
+            copy.columns = _columns;
+            copy.filters = _filters;
+            copy.debugLevel = _debugLevel;
+            return copy;
+        }
+
+        override protected function prepareStatement():void
+        {
+            var sql:String = "update " + _table + " set ";
+            for (var column:String in _columns)
+            {
+                sql += column + "=" + _columns[column] + ",";
+            }
+            sql = sql.substring(0, sql.length - 1);
+            if (_filters)
+            {
+                sql += " where ";
+                for (var filter:String in _filters)
+                {
+                    sql += filter + "=" + _filters[filter] + " and ";
+                }
+                // remove last ' and '
+                sql = sql.substring(0, sql.length - 5);
+            }
+            _statement.text = sql;
+            _changed = false;
+        }
+
+        public function toString():String
+        {
+            return "UPDATE " + _table + ": " + _statement.text;
+        }
+
+    }
 }

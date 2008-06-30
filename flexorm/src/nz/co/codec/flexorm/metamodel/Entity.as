@@ -1,291 +1,365 @@
 package nz.co.codec.flexorm.metamodel
 {
-	import mx.collections.ArrayCollection;
-	import mx.core.IUID;
-	import mx.utils.StringUtil;
-	
-	import nz.co.codec.flexorm.command.CreateCommand;
-	import nz.co.codec.flexorm.command.DeleteCommand;
-	import nz.co.codec.flexorm.command.FindAllCommand;
-	import nz.co.codec.flexorm.command.InsertCommand;
-	import nz.co.codec.flexorm.command.SelectCommand;
-	import nz.co.codec.flexorm.command.UpdateCommand;
-	
-	public class Entity implements IUID
-	{
-		private var _cls:Class;
-		
-		private var _classname:String;
-		
-		private var _fkColumn:String;
-		
-		private var _table:String;
-		
-		private var _fields:ArrayCollection;
-		
-		private var _manyToOneAssociations:ArrayCollection;
-		
-		private var _oneToManyAssociations:ArrayCollection;
-		
-		private var _oneToManyInverseAssociations:ArrayCollection;
-		
-		private var _manyToManyAssociations:ArrayCollection;
-		
-		private var _manyToManyInverseAssociations:ArrayCollection;
-		
-		private var _dependencies:ArrayCollection;
-		
-		public var superEntity:Entity;
-		
-		/**
-		 * info about the id property of the entity
-		 */
-		public var identity:Identity;
-		
-		public var findAllCommand:FindAllCommand;
-		
-		public var selectCommand:SelectCommand;
-		
-		public var insertCommand:InsertCommand;
-		
-		public var updateCommand:UpdateCommand;
-		
-		public var deleteCommand:DeleteCommand;
-		
-		public var createCommand:CreateCommand;
-		
-		/**
-		 * flag to indicate whether the loading of metadata
-		 * for an entity has been completed
-		 */
-		public var initialisationComplete:Boolean;
-		
-		public function Entity(cls:Class)
-		{
-			_cls = cls;
-			_classname = getClassName(cls);
-			_fkColumn = getFkColumn(_classname);
-			_table = _classname;
-			initialisationComplete = false;
-		}
-		
-		public function set uid(value:String):void { }
-		
-		public function get uid():String
-		{
-			return _classname;
-		}
-		
-		public function get cls():Class
-		{
-			return _cls;
-		}
-		
-		public function get classname():String
-		{
-			return _classname;
-		}
-		
-		public function get fkColumn():String
-		{
-			return _fkColumn;
-		}
-		
-		/**
-		 * database table name; defaults to entity class name
-		 */
-		public function set table(value:String):void
-		{
-			if (value && StringUtil.trim(value).length > 0)
-			{
-				_table = value;
-			}
-		}
-		
-		public function get table():String
-		{
-			return _table;
-		}
-		
-		public function set fields(value:ArrayCollection):void
-		{
-			_fields = value;
-		}
-		
-		public function get fields():ArrayCollection
-		{
-			if (!_fields)
-			{
-				_fields = new ArrayCollection();
-			}
-			return _fields;
-		}
-		
-		public function addField(value:Field):void
-		{
-			if (!_fields)
-			{
-				_fields = new ArrayCollection();
-			}
-			_fields.addItem(value);
-		}
-		
-		public function set manyToOneAssociations(value:ArrayCollection):void
-		{
-			_manyToOneAssociations = value;
-			for each (var a:Association in value)
-			{
-				a.ownerEntity = this;
-			}
-		}
-		
-		public function get manyToOneAssociations():ArrayCollection
-		{
-			return _manyToOneAssociations;
-		}
-		
-		public function addManyToOneAssociation(value:Association):void
-		{
-			if (!_manyToOneAssociations)
-			{
-				_manyToOneAssociations = new ArrayCollection();
-			}
-			_manyToOneAssociations.addItem(value);
-			value.ownerEntity = this;
-		}
-		
-		public function set oneToManyAssociations(value:ArrayCollection):void
-		{
-			_oneToManyAssociations = value;
-			for each (var a:OneToManyAssociation in value)
-			{
-				a.ownerEntity = this;
-			}
-		}
-		
-		public function get oneToManyAssociations():ArrayCollection
-		{
-			return _oneToManyAssociations;
-		}
-		
-		public function addOneToManyAssociation(value:OneToManyAssociation):void
-		{
-			if (!_oneToManyAssociations)
-			{
-				_oneToManyAssociations = new ArrayCollection();
-			}
-			_oneToManyAssociations.addItem(value);
-			value.ownerEntity = this;
-		}
-		
-		/**
-		 * a copy of the oneToManyAssociation set on
-		 * the map of the associated entity
-		 */
-		public function set oneToManyInverseAssociations(value:ArrayCollection):void
-		{
-			_oneToManyInverseAssociations = value;
-			for each (var a:OneToManyAssociation in value)
-			{
-				a.ownerEntity = this;
-			}
-		}
-		
-		public function get oneToManyInverseAssociations():ArrayCollection
-		{
-			return _oneToManyInverseAssociations;
-		}
-		
-		public function addOneToManyInverseAssociation(value:OneToManyAssociation):void
-		{
-			if (!_oneToManyInverseAssociations)
-			{
-				_oneToManyInverseAssociations = new ArrayCollection();
-			}
-			_oneToManyInverseAssociations.addItem(value);
-			value.ownerEntity = this;
-		}
-		
-		public function set manyToManyAssociations(value:ArrayCollection):void
-		{
-			_manyToManyAssociations = value;
-			for each (var a:ManyToManyAssociation in value)
-			{
-				a.ownerEntity = this;
-			}
-		}
-		
-		public function get manyToManyAssociations():ArrayCollection
-		{
-			return _manyToManyAssociations;
-		}
-		
-		public function addManyToManyAssociation(value:ManyToManyAssociation):void
-		{
-			if (!_manyToManyAssociations)
-			{
-				_manyToManyAssociations = new ArrayCollection();
-			}
-			_manyToManyAssociations.addItem(value);
-			value.ownerEntity = this;
-		}
-		
-		public function set manyToManyInverseAssociations(value:ArrayCollection):void
-		{
-			_manyToManyInverseAssociations = value;
-			for each (var a:ManyToManyAssociation in value)
-			{
-				a.ownerEntity = this;
-			}
-		}
-		
-		public function get manyToManyInverseAssociations():ArrayCollection
-		{
-			return _manyToManyInverseAssociations;
-		}
-		
-		public function addManyToManyInverseAssociation(value:ManyToManyAssociation):void
-		{
-			if (!_manyToManyInverseAssociations)
-			{
-				_manyToManyInverseAssociations = new ArrayCollection();
-			}
-			_manyToManyInverseAssociations.addItem(value);
-			value.ownerEntity = this;
-		}
-		
-		public function set dependencies(value:ArrayCollection):void
-		{
-			_dependencies = value;
-		}
-		
-		public function get dependencies():ArrayCollection
-		{
-			return _dependencies;
-		}
-		
-		public function addDependency(value:Entity):void
-		{
-			if (!_dependencies)
-			{
-				_dependencies = new ArrayCollection();
-			}
-			_dependencies.addItem(value);
-		}
-		
-		private function getClassName(c:Class):String
-		{
-			var className:String = String(c);
-			var len:int = className.length;
-			var x:int = className.lastIndexOf(" ") + 1;
-			return className.substr(x, 1).toLowerCase() +
-				className.substring(x + 1, len - 1);
-		}
-		
-		private function getFkColumn(classname:String):String
-		{
-			return classname + "Id";
-		}
+    import flash.utils.getQualifiedClassName;
 
-	}
+    import mx.core.IUID;
+
+    import nz.co.codec.flexorm.NamingStrategy;
+    import nz.co.codec.flexorm.command.CreateCommand;
+    import nz.co.codec.flexorm.command.CreateCommandAsync;
+    import nz.co.codec.flexorm.command.DeleteCommand;
+    import nz.co.codec.flexorm.command.FindAllCommand;
+    import nz.co.codec.flexorm.command.InsertCommand;
+    import nz.co.codec.flexorm.command.MarkForDeletionCommand;
+    import nz.co.codec.flexorm.command.SelectCommand;
+    import nz.co.codec.flexorm.command.SelectFkMapCommand;
+    import nz.co.codec.flexorm.command.SelectIdMapCommand;
+    import nz.co.codec.flexorm.command.SelectUnsynchronisedCommand;
+    import nz.co.codec.flexorm.command.UpdateCommand;
+    import nz.co.codec.flexorm.util.Inflector;
+    import nz.co.codec.flexorm.util.StringUtils;
+
+    public class Entity implements IUID
+    {
+        public var findAllCommand:FindAllCommand;
+
+        public var selectCommand:SelectCommand;
+
+        public var insertCommand:InsertCommand;
+
+        public var updateCommand:UpdateCommand;
+
+        public var deleteCommand:DeleteCommand;
+
+        public var createCommand:CreateCommand;
+
+        public var createCommandAsync:CreateCommandAsync;
+
+        public var selectIdMapCommand:SelectIdMapCommand;
+
+        public var selectFkMapCommand:SelectFkMapCommand;
+
+        public var selectUnsynchronisedCommand:SelectUnsynchronisedCommand;
+
+        public var markForDeletionCommand:MarkForDeletionCommand;
+
+        public var indexCommands:Array;
+
+        private var _cls:Class;
+
+        private var _name:String;
+
+        private var _root:String;
+
+        private var _className:String;
+
+        private var _table:String;
+
+        private var _tableSingular:String;
+
+        private var _fkColumn:String;
+
+        private var _fkProperty:String;
+
+        private var _identities:Array = [];
+
+        public var keys:Array;
+
+        public var superEntity:Entity;
+
+        private var _fields:Array = [];
+
+        private var _manyToOneAssociations:Array = [];
+
+        private var _oneToManyAssociations:Array = [];
+
+        private var _oneToManyInverseAssociations:Array = [];
+
+        private var _manyToManyAssociations:Array = [];
+
+        private var _manyToManyInverseAssociations:Array = [];
+
+        private var _dependencies:Array = [];
+
+        private var _namingStrategy:String;
+
+        /**
+         * Flag to indicate whether the loading of metadata for an entity has
+         * been completed.
+         */
+        public var initialisationComplete:Boolean;
+
+        public function Entity(
+            c:Class,
+            namingStrategy:String=NamingStrategy.UNDERSCORE_NAMES,
+            name:String=null,
+            root:String=null)
+        {
+            _cls = c;
+            _className = getClassName(c);
+            _namingStrategy = namingStrategy;
+
+            if (namingStrategy == NamingStrategy.CAMEL_CASE_NAMES)
+            {
+                if (name)
+                {
+                    _tableSingular = Inflector.singularize(StringUtils.camelCase(name));
+                }
+                else
+                {
+                    _tableSingular = _className;
+                }
+                _table = _tableSingular;
+                _fkColumn = StringUtils.startLowerCase(_tableSingular) + "Id";
+                _fkProperty = _fkColumn;
+            }
+            else
+            {
+                if (name)
+                {
+                    _tableSingular = Inflector.singularize(StringUtils.underscore(name)).toLowerCase();
+                    _table = Inflector.pluralize(StringUtils.underscore(name)).toLowerCase();
+                }
+                else
+                {
+                    _tableSingular = StringUtils.underscore(_className).toLowerCase();
+                    _table = Inflector.pluralize(_tableSingular);
+                }
+                _fkColumn = _tableSingular + "_id";
+                if (root)
+                {
+                    _fkProperty = StringUtils.startLowerCase(Inflector.singularize(StringUtils.camelCase(name))) + "Id";
+                }
+                else
+                {
+                    _fkProperty = StringUtils.startLowerCase(_className) + "Id";
+                }
+            }
+
+            _name = isDynamicObject()? name : _className;
+            _root = root;
+
+            initialisationComplete = false;
+        }
+
+        public function set uid(value:String):void { }
+
+        public function get uid():String
+        {
+            return _name;
+        }
+
+        public function get cls():Class
+        {
+            return _cls;
+        }
+
+        public function get name():String
+        {
+            return _name;
+        }
+
+        public function get root():String
+        {
+            return _root;
+        }
+
+        public function get className():String
+        {
+            return _className;
+        }
+
+        public function isDynamicObject():Boolean
+        {
+            return (_className == "Object");
+        }
+
+        public function get table():String
+        {
+            return _table;
+        }
+
+        public function get tableSingular():String
+        {
+            return _tableSingular;
+        }
+
+        public function get fkColumn():String
+        {
+            return _fkColumn;
+        }
+
+        public function get fkProperty():String
+        {
+            return _fkProperty;
+        }
+
+        public function addIdentity(value:IIdentity):void
+        {
+            _identities.push(value);
+        }
+
+        public function get identities():Array
+        {
+            return _identities;
+        }
+
+        /**
+         * Convenience getter for an entity with a primary key
+         */
+        public function get pk():PrimaryIdentity
+        {
+            if (_identities && _identities.length == 1)
+            {
+                return PrimaryIdentity(_identities[0]);
+            }
+            return null;
+        }
+
+        public function hasCompositeKey():Boolean
+        {
+            return (_identities && _identities.length > 1)? true : false;
+        }
+
+        public function set fields(value:Array):void
+        {
+            _fields = value;
+        }
+
+        public function get fields():Array
+        {
+            return _fields;
+        }
+
+        public function addField(value:Field):void
+        {
+            _fields.push(value);
+        }
+
+        public function set manyToOneAssociations(value:Array):void
+        {
+            for each (var a:Association in value)
+            {
+                a.ownerEntity = this;
+            }
+            _manyToOneAssociations = value;
+        }
+
+        public function get manyToOneAssociations():Array
+        {
+            return _manyToOneAssociations;
+        }
+
+        public function addManyToOneAssociation(value:Association):void
+        {
+            value.ownerEntity = this;
+            _manyToOneAssociations.push(value);
+        }
+
+        public function set oneToManyAssociations(value:Array):void
+        {
+            for each (var a:OneToManyAssociation in value)
+            {
+                a.ownerEntity = this;
+            }
+            _oneToManyAssociations = value;
+        }
+
+        public function get oneToManyAssociations():Array
+        {
+            return _oneToManyAssociations;
+        }
+
+        public function addOneToManyAssociation(value:OneToManyAssociation):void
+        {
+            value.ownerEntity = this;
+            _oneToManyAssociations.push(value);
+        }
+
+        /**
+         * a copy of the oneToManyAssociation set on
+         * the map of the associated entity
+         */
+        public function set oneToManyInverseAssociations(value:Array):void
+        {
+            for each (var a:OneToManyAssociation in value)
+            {
+                a.ownerEntity = this;
+            }
+            _oneToManyInverseAssociations = value;
+        }
+
+        public function get oneToManyInverseAssociations():Array
+        {
+            return _oneToManyInverseAssociations;
+        }
+
+        public function addOneToManyInverseAssociation(value:OneToManyAssociation):void
+        {
+            value.ownerEntity = this;
+            _oneToManyInverseAssociations.push(value);
+        }
+
+        public function set manyToManyAssociations(value:Array):void
+        {
+            for each (var a:ManyToManyAssociation in value)
+            {
+                a.ownerEntity = this;
+            }
+            _manyToManyAssociations = value;
+        }
+
+        public function get manyToManyAssociations():Array
+        {
+            return _manyToManyAssociations;
+        }
+
+        public function addManyToManyAssociation(value:ManyToManyAssociation):void
+        {
+            value.ownerEntity = this;
+            _manyToManyAssociations.push(value);
+        }
+
+        public function set manyToManyInverseAssociations(value:Array):void
+        {
+            for each (var a:ManyToManyAssociation in value)
+            {
+                a.ownerEntity = this;
+            }
+            _manyToManyInverseAssociations = value;
+        }
+
+        public function get manyToManyInverseAssociations():Array
+        {
+            return _manyToManyInverseAssociations;
+        }
+
+        public function addManyToManyInverseAssociation(value:ManyToManyAssociation):void
+        {
+            value.ownerEntity = this;
+            _manyToManyInverseAssociations.push(value);
+        }
+
+        public function set dependencies(value:Array):void
+        {
+            _dependencies = value;
+        }
+
+        public function get dependencies():Array
+        {
+            return _dependencies;
+        }
+
+        public function addDependency(value:Entity):void
+        {
+            _dependencies.push(value);
+        }
+
+        private function getClassName(c:Class):String
+        {
+            var qname:String = getQualifiedClassName(c);
+            return qname.substring(qname.lastIndexOf(":") + 1);
+        }
+
+    }
 }
