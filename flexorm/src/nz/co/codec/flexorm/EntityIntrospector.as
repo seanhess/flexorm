@@ -54,7 +54,7 @@ package nz.co.codec.flexorm
         public function EntityIntrospector(
             map:Object,
             sqlConnection:SQLConnection,
-            namingStrategy:String=NamingStrategy.UNDERSCORE_NAMES,
+            namingStrategy:String="underscore",
             syncSupport:Boolean=false)
         {
             _map = map;
@@ -70,7 +70,7 @@ package nz.co.codec.flexorm
             _debugLevel = value;
         }
 
-        internal function loadMetadata(c:Class, table:String=null, executor:IExecutor=null):Entity
+        public function loadMetadata(c:Class, table:String=null, executor:IExecutor=null):Entity
         {
             var entity:Entity = loadMetadataForClass(c, table);
 
@@ -216,129 +216,6 @@ package nz.co.codec.flexorm
                 }
             }
             return createSequence;
-        }
-
-
-        /**
-         * Sandbox feature: requires persistence of metadata such as in the
-         * database. TODO remove constructors with arguments from metamodel
-         * objects and add annotations.
-         *
-         * The annotations on typed objects serve as persistent storage of
-         * metadata that is read at the start of each EntityManager session.
-         */
-        public function loadMetadataForDynamicObject(obj:Object, name:String):Entity
-        {
-            return loadMetadataForObject(obj, name, name);
-        }
-
-        private function loadMetadataForObject(obj:Object, name:String, root:String):Entity
-        {
-            var c:Class = Class(getDefinitionByName(getQualifiedClassName(obj)));
-            var entity:Entity = _map[name];
-            if (entity == null)
-            {
-                entity = new Entity(c, _namingStrategy, name, root);
-                _map[name] = entity;
-            }
-            var deferred:Array = [];
-            for (var property:String in obj)
-            {
-                var column:String;
-                if (_namingStrategy == NamingStrategy.CAMEL_CASE_NAMES)
-                {
-                    column = property;
-                }
-                else
-                {
-                    column = StringUtils.underscore(property);
-                }
-
-                var value:Object = obj[property];
-                if (value)
-                {
-                    var propertyClass:Class = Class(getDefinitionByName(getQualifiedClassName(value)));
-                    var propertyClassName:String = getClassName(propertyClass);
-                    if (propertyClassName == "Object")
-                    {
-                        entity.addManyToOneAssociation(new Association({
-                            property: property,
-                            associatedEntity: loadMetadataForObject(value, property, root)
-                        }));
-                    }
-
-                    else if ((value is Array || value is ArrayCollection) &&
-                             (value.length > 0))
-                    {
-                        var item:Object = value[0]; // only need one sample object
-                        var itemClass:Class = Class(getDefinitionByName(getQualifiedClassName(item)));
-                        var itemClassName:String = getClassName(itemClass);
-                        var associatedEntity:Entity;
-                        if (itemClassName == "Object")
-                        {
-                            associatedEntity = _map[property];
-                            if (associatedEntity == null)
-                            {
-                                associatedEntity = new Entity(itemClass, _namingStrategy, property, root);
-                                _map[property] = associatedEntity;
-                                deferred.push({ type: item, name: property });
-                            }
-                        }
-                        else
-                        {
-                            associatedEntity = _map[itemClassName];
-                            if (associatedEntity == null)
-                            {
-                                associatedEntity = new Entity(itemClass, _namingStrategy);
-                                _map[itemClassName] = associatedEntity;
-                                deferred.push({ type: itemClass, name: null });
-                            }
-                        }
-                        var a:OneToManyAssociation = new OneToManyAssociation({
-                            property: property,
-                            associatedEntity: associatedEntity,
-                            fkColumn: entity.fkColumn,
-                            fkProperty: entity.fkProperty
-                        });
-                        associatedEntity.addOneToManyInverseAssociation(a);
-                        entity.addOneToManyAssociation(a); // also sets the ownerEntity as entity
-                    }
-
-                    else
-                    {
-                        entity.addField(new Field({
-                            property: property,
-                            column: column,
-                            type: getSQLType(propertyClassName)
-                        }));
-                    }
-                }
-            }
-            var idProperty:String = "__id";
-            obj[idProperty] = 0;
-            entity.addIdentity(new PrimaryIdentity({
-                property: idProperty,
-                column: entity.fkColumn
-            }));
-            entity.keys = getKeys(entity);
-            buildSQLCommands(entity);
-            entity.createCommand.execute();
-            entity.initialisationComplete = true;
-
-            while (deferred.length > 0)
-            {
-                var def:Object = deferred.pop();
-                if (def.name)
-                {
-                    loadMetadataForObject(def.type, def.name, root);
-                }
-                else
-                {
-                    loadMetadataForClass(def.type, def.name);
-                }
-            }
-
-            return entity;
         }
 
         private function loadMetadataForClass(c:Class, table:String):Entity
@@ -1094,6 +971,129 @@ package nz.co.codec.flexorm
                 default:
                     return SQLType.TEXT;
             }
+        }
+
+
+        /**
+         * Sandbox feature: requires persistence of metadata such as in the
+         * database. TODO remove constructors with arguments from metamodel
+         * objects and add annotations.
+         *
+         * The annotations on typed objects serve as persistent storage of
+         * metadata that is read at the start of each EntityManager session.
+         */
+        public function loadMetadataForDynamicObject(obj:Object, name:String):Entity
+        {
+            return loadMetadataForObject(obj, name, name);
+        }
+
+        private function loadMetadataForObject(obj:Object, name:String, root:String):Entity
+        {
+            var c:Class = Class(getDefinitionByName(getQualifiedClassName(obj)));
+            var entity:Entity = _map[name];
+            if (entity == null)
+            {
+                entity = new Entity(c, _namingStrategy, name, root);
+                _map[name] = entity;
+            }
+            var deferred:Array = [];
+            for (var property:String in obj)
+            {
+                var column:String;
+                if (_namingStrategy == NamingStrategy.CAMEL_CASE_NAMES)
+                {
+                    column = property;
+                }
+                else
+                {
+                    column = StringUtils.underscore(property);
+                }
+
+                var value:Object = obj[property];
+                if (value)
+                {
+                    var propertyClass:Class = Class(getDefinitionByName(getQualifiedClassName(value)));
+                    var propertyClassName:String = getClassName(propertyClass);
+                    if (propertyClassName == "Object")
+                    {
+                        entity.addManyToOneAssociation(new Association({
+                            property: property,
+                            associatedEntity: loadMetadataForObject(value, property, root)
+                        }));
+                    }
+
+                    else if ((value is Array || value is ArrayCollection) &&
+                             (value.length > 0))
+                    {
+                        var item:Object = value[0]; // only need one sample object
+                        var itemClass:Class = Class(getDefinitionByName(getQualifiedClassName(item)));
+                        var itemClassName:String = getClassName(itemClass);
+                        var associatedEntity:Entity;
+                        if (itemClassName == "Object")
+                        {
+                            associatedEntity = _map[property];
+                            if (associatedEntity == null)
+                            {
+                                associatedEntity = new Entity(itemClass, _namingStrategy, property, root);
+                                _map[property] = associatedEntity;
+                                deferred.push({ type: item, name: property });
+                            }
+                        }
+                        else
+                        {
+                            associatedEntity = _map[itemClassName];
+                            if (associatedEntity == null)
+                            {
+                                associatedEntity = new Entity(itemClass, _namingStrategy);
+                                _map[itemClassName] = associatedEntity;
+                                deferred.push({ type: itemClass, name: null });
+                            }
+                        }
+                        var a:OneToManyAssociation = new OneToManyAssociation({
+                            property: property,
+                            associatedEntity: associatedEntity,
+                            fkColumn: entity.fkColumn,
+                            fkProperty: entity.fkProperty
+                        });
+                        associatedEntity.addOneToManyInverseAssociation(a);
+                        entity.addOneToManyAssociation(a); // also sets the ownerEntity as entity
+                    }
+
+                    else
+                    {
+                        entity.addField(new Field({
+                            property: property,
+                            column: column,
+                            type: getSQLType(propertyClassName)
+                        }));
+                    }
+                }
+            }
+            var idProperty:String = "__id";
+            obj[idProperty] = 0;
+            entity.addIdentity(new PrimaryIdentity({
+                property: idProperty,
+                column: entity.fkColumn
+            }));
+            entity.keys = getKeys(entity);
+            buildSQLCommands(entity);
+            entity.createCommand.execute();
+            entity.initialisationComplete = true;
+
+            while (deferred.length > 0)
+            {
+                var def:Object = deferred.pop();
+                if (def.name)
+                {
+                    loadMetadataForObject(def.type, def.name, root);
+                }
+                else
+                {
+                    loadMetadataForClass(def.type, def.name);
+                }
+            }
+
+            return entity;
         }
 
     }

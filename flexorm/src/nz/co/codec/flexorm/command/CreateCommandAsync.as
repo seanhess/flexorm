@@ -150,17 +150,14 @@ package nz.co.codec.flexorm.command
         private function getExistingColumns(schemaResult:SQLSchemaResult):ArrayCollection
         {
             var existingColumns:ArrayCollection = new ArrayCollection();
-//			if (schemaResult.tables.length > 0)
-//			{
-//			should have the one table requested or the errorHandler is called
-                for each(var column:SQLColumnSchema in schemaResult.tables[0].columns)
+            // should have the one table requested or the errorHandler is called
+            for each(var column:SQLColumnSchema in schemaResult.tables[0].columns)
+            {
+                if (!column.primaryKey)
                 {
-                    if (!column.primaryKey)
-                    {
-                        existingColumns.addItem(column.name);
-                    }
+                    existingColumns.addItem(column.name);
                 }
-//			}
+            }
             return existingColumns;
         }
 

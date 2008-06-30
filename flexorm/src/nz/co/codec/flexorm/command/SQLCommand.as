@@ -42,12 +42,6 @@ package nz.co.codec.flexorm.command
             _responded = false;
         }
 
-        // TODO remove; for debugging purposes
-        public function get statement():SQLStatement
-        {
-            return _statement;
-        }
-
         protected function set columns(value:Object):void
         {
             _columns = value;

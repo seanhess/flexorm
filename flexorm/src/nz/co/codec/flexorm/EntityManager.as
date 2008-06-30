@@ -82,7 +82,7 @@ package nz.co.codec.flexorm
 
         /**
          * Returns metadata for a persistent object. If not already defined,
-         * then uses the EntityReflector to load metadata using the
+         * then uses the EntityIntrospector to load metadata using the
          * persistent object's annotations.
          */
         private function getEntity(cls:Class, name:String=null):Entity

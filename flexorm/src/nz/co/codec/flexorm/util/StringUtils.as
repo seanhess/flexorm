@@ -4,27 +4,6 @@ package nz.co.codec.flexorm.util
 
     public class StringUtils
     {
-/*
-        public static function pluralise(name:String):String
-        {
-            if (name.match(/y$/i))
-            {
-                return name.substr(0, name.length - 1) + "ies";
-            }
-            else if (name.match(/us$/i))
-            {
-                return name + "es";
-            }
-            else if (name.match(/s$/i))
-            {
-                return name;
-            }
-            else
-            {
-                return name + "s";
-            }
-        }
-*/
         public static function underscore(name:String):String
         {
             var retval:String = "";

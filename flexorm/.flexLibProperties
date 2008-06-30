@@ -2,47 +2,50 @@
 <flexLibProperties version="1">
 <includeClasses>
 <classEntry path="nz.co.codec.flexorm.metamodel.Association"/>
+<classEntry path="nz.co.codec.flexorm.EntityIntrospector"/>
+<classEntry path="nz.co.codec.flexorm.metamodel.IIdentity"/>
 <classEntry path="nz.co.codec.flexorm.metamodel.Entity"/>
+<classEntry path="nz.co.codec.flexorm.command.SelectIdMapCommand"/>
 <classEntry path="nz.co.codec.flexorm.NamingStrategy"/>
 <classEntry path="nz.co.codec.flexorm.EntityError"/>
+<classEntry path="nz.co.codec.flexorm.metamodel.PrimaryIdentity"/>
 <classEntry path="nz.co.codec.flexorm.command.FkConstraintDeleteTriggerCommand"/>
-<classEntry path="nz.co.codec.flexorm.util.ServiceCommand"/>
-<classEntry path="nz.co.codec.flexorm.SyncToServerCommand"/>
 <classEntry path="nz.co.codec.flexorm.EntityEvent"/>
 <classEntry path="nz.co.codec.flexorm.NonBlockingExecutor"/>
 <classEntry path="nz.co.codec.flexorm.util.PersistentEntity"/>
 <classEntry path="nz.co.codec.flexorm.CascadeType"/>
+<classEntry path="nz.co.codec.flexorm.command.SelectUnsynchronisedCommand"/>
 <classEntry path="nz.co.codec.flexorm.SQLType"/>
 <classEntry path="nz.co.codec.flexorm.command.BeginCommand"/>
 <classEntry path="nz.co.codec.flexorm.metamodel.ManyToManyAssociation"/>
 <classEntry path="nz.co.codec.flexorm.command.CreateIndexCommand"/>
 <classEntry path="nz.co.codec.flexorm.command.SQLParameterisedCommand"/>
 <classEntry path="nz.co.codec.flexorm.BlockingExecutor"/>
+<classEntry path="nz.co.codec.flexorm.util.StringUtils"/>
 <classEntry path="nz.co.codec.flexorm.command.DeleteCommand"/>
-<classEntry path="nz.co.codec.flexorm.SyncFromServerCommand"/>
 <classEntry path="nz.co.codec.flexorm.metamodel.ListAssociation"/>
 <classEntry path="nz.co.codec.flexorm.command.MarkForDeletionCommand"/>
+<classEntry path="nz.co.codec.flexorm.command.SelectMarkedForDeletionCommand"/>
 <classEntry path="nz.co.codec.flexorm.command.SelectCommand"/>
 <classEntry path="nz.co.codec.flexorm.command.CreateCommandAsync"/>
-<classEntry path="nz.co.codec.flexorm.command.SelectMarkedForDeletionCommand"/>
 <classEntry path="nz.co.codec.flexorm.command.InsertCommand"/>
-<classEntry path="nz.co.codec.flexorm.SynchronisationCommandBase"/>
+<classEntry path="nz.co.codec.flexorm.util.Inflector"/>
 <classEntry path="nz.co.codec.flexorm.Executor"/>
 <classEntry path="nz.co.codec.flexorm.command.FkConstraintUpdateTriggerCommand"/>
 <classEntry path="nz.co.codec.flexorm.command.CommitCommand"/>
 <classEntry path="nz.co.codec.flexorm.IExecutor"/>
+<classEntry path="nz.co.codec.flexorm.metamodel.Key"/>
 <classEntry path="nz.co.codec.flexorm.LazyList"/>
 <classEntry path="nz.co.codec.flexorm.util.Mixin"/>
 <classEntry path="nz.co.codec.flexorm.command.FindAllCommand"/>
 <classEntry path="nz.co.codec.flexorm.IEntityManager"/>
-<classEntry path="nz.co.codec.flexorm.RailsSyncManager"/>
 <classEntry path="nz.co.codec.flexorm.metamodel.OneToManyAssociation"/>
 <classEntry path="nz.co.codec.flexorm.command.RollbackCommand"/>
+<classEntry path="nz.co.codec.flexorm.metamodel.CompositeIdentity"/>
 <classEntry path="nz.co.codec.flexorm.command.UpdateCommand"/>
 <classEntry path="nz.co.codec.flexorm.command.SelectManyToManyCommand"/>
 <classEntry path="nz.co.codec.flexorm.command.SelectFkMapCommand"/>
 <classEntry path="nz.co.codec.flexorm.command.SelectManyToManyIndicesCommand"/>
-<classEntry path="nz.co.codec.flexorm.util.HTTPMethod"/>
 <classEntry path="nz.co.codec.flexorm.metamodel.Field"/>
 <classEntry path="nz.co.codec.flexorm.IEntityManagerAsync"/>
 <classEntry path="nz.co.codec.flexorm.EntityManager"/>
@@ -54,7 +57,6 @@
 <classEntry path="nz.co.codec.flexorm.command.FkConstraintInsertTriggerCommand"/>
 <classEntry path="nz.co.codec.flexorm.metamodel.IListAssociation"/>
 <classEntry path="nz.co.codec.flexorm.Tags"/>
-<classEntry path="nz.co.codec.flexorm.util.ServiceUtil"/>
 </includeClasses>
 <includeResources/>
 <namespaceManifests/>

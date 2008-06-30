@@ -125,35 +125,25 @@ package nz.co.codec.flexorm
             var cn:String = getClassName(c);
             var entity:Entity = map[cn];
 
-            // TODO the try block doesn't seem effective. I have commented out
-            // the throw statement in Executor.fault. The intent was to skip
-            // the remainder of processing.
-//            try
-//            {
-                var q:BlockingExecutor = new BlockingExecutor();
-                q.setResponder(responder);
-                if (entity == null || !entity.initialisationComplete)
+            var q:BlockingExecutor = new BlockingExecutor();
+            q.setResponder(responder);
+            if (entity == null || !entity.initialisationComplete)
+            {
+                entity = introspector.loadMetadata(c, null, q);
+            }
+            q.addCommand(entity.findAllCommand.clone());
+            q.addFunction(function(data:Object):void
+            {
+                if (data)
                 {
-                    entity = introspector.loadMetadata(c, null, q);
+                    q.response = typeArray(data as Array, entity, q.branchNonBlocking());
                 }
-                q.addCommand(entity.findAllCommand.clone());
-                q.addFunction(function(data:Object):void
+                else
                 {
-                    if (data)
-                    {
-                        q.response = typeArray(data as Array, entity, q.branchNonBlocking());
-                    }
-                    else
-                    {
-                        q.fault(new EntityError(debug("Find all of " + entity.className + " failed")));
-                    }
-                });
-                q.execute();
-//            }
-//            catch (e:EntityError)
-//            {
-                // responder should have been notified
-//            }
+                    q.fault(new EntityError(debug("Find all of " + entity.className + " failed")));
+                }
+            });
+            q.execute();
         }
 
         public function loadOneToManyAssociation(a:OneToManyAssociation, id:int, responder:IResponder):void
@@ -346,7 +336,6 @@ package nz.co.codec.flexorm
             {
                 if (data)
                 {
-//                    q.response = typeObject(data[0], entity, q.branchNonBlocking("typeObject"));
                     q.response = typeObject(data[0], entity, q);
                 }
                 else

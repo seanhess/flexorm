@@ -65,18 +65,12 @@ package nz.co.codec.flexorm
         public function addCommand(value:ICommand, label:String=null):void
         {
             childCount++;
-//            if (_debugLevel > 0 && label)
-//                trace(this.label + " adding command " + childCount + " " + label);
-
             q.push({ executable: value, label: label });
         }
 
         public function addFunction(value:Function, label:String=null):void
         {
             childCount++;
-//            if (_debugLevel > 0 && label)
-//                trace(this.label + " adding function " + childCount + " " + label);
-
             q.push({ executable: value, label: label });
         }
 
