@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:WindowedApplication xmlns:mx="http://www.adobe.com/2006/mxml" layout="absolute"
+	width="600" height="400"
+	xmlns:flexunit="flexunit.flexui.*"
+	creationComplete="init()" close="tearDown()">
+	<mx:Script>
+		<![CDATA[
+			import flexunit.framework.TestSuite;
+
+			import nz.co.codec.flexorm.EntityManagerAsync;
+
+			import ormtest.EntityManagerAsyncTest;
+
+			private var em:EntityManagerAsync = EntityManagerAsync.instance;
+
+			private var sqlConnection:SQLConnection;
+
+			private var dbFile:File;
+
+			private function init():void
+			{
+				setUp();
+			}
+
+			private function runTests(event:SQLEvent):void
+			{
+				em.sqlConnection.removeEventListener(SQLEvent.OPEN, runTests);
+				testRunner.test = createSuite();
+				testRunner.startTest();
+			}
+
+			private function createSuite():TestSuite
+			{
+				return EntityManagerAsyncTest.suite();
+			}
+
+			public function setUp():void
+			{
+				dbFile = File.userDirectory.resolvePath("flexorm_test.db");
+				sqlConnection = new SQLConnection();
+				em.sqlConnection = sqlConnection;
+				sqlConnection.addEventListener(SQLEvent.OPEN, runTests);
+				sqlConnection.openAsync(dbFile);
+			}
+
+			public function tearDown():void
+			{
+				sqlConnection.close();
+				dbFile.deleteFile(); // TODO should delete file in close callback
+			}
+		]]>
+	</mx:Script>
+	<flexunit:TestRunnerBase id="testRunner" width="100%" height="100%"/>
+</mx:WindowedApplication>

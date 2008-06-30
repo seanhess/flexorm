@@ -7,47 +7,46 @@
 		<![CDATA[
 			import mx.collections.ArrayCollection;
 			import mx.collections.IList;
-			
+
 			import ormtest.model.Contact;
 			import ormtest.model.Organisation;
 			import ormtest.model.Role;
-			
+
 			import nz.co.codec.flexorm.EntityManager;
-			import nz.co.codec.flexorm.IEntityManager;
-			
-			private var em:IEntityManager = EntityManager.instance;
-			
+
+			private var em:EntityManager = EntityManager.instance;
+
 			[Bindable]
 			public var organisations:ArrayCollection;
-			
+
 			private var _roles:ArrayCollection;
-			
+
 			private var _contact:Contact;
-			
+
 			[Bindable]
 			public function set roles(value:ArrayCollection):void
 			{
 				_roles = value;
 				dispatchEvent(new Event("changeSelectedRoleIndices"));
 			}
-			
+
 			public function get roles():ArrayCollection
 			{
 				return _roles;
 			}
-			
+
 			[Bindable]
 			public function set contact(value:Contact):void
 			{
 				_contact = value;
 				dispatchEvent(new Event("changeSelectedRoleIndices"));
 			}
-			
+
 			public function get contact():Contact
 			{
 				return _contact;
 			}
-			
+
 			[Bindable(event="changeSelectedRoleIndices")]
 			private function getSelectedRoleIndices():Array
 			{
@@ -67,12 +66,12 @@
 				}
 				return result;
 			}
-			
+
 			public function newItem():void
 			{
 				contact = new Contact();
 			}
-			
+
 			public function saveItem():void
 			{
 				contact.name = contactName.text;
@@ -81,14 +80,14 @@
 				contact.roles = new ArrayCollection(checkList.selectedItems);
 				em.save(contact);
 			}
-			
+
 			public function deleteItem():void
 			{
 				em.remove(contact);
 			}
 		]]>
 	</mx:Script>
-	
+
 	<mx:Form width="100%" height="100%" enabled="{contact != null}">
 		<mx:FormItem label="Name:">
 			<mx:TextInput id="contactName" text="{contact.name}"/>
@@ -106,5 +105,5 @@
 				selectedIndices="{getSelectedRoleIndices()}"/>
 		</mx:FormItem>
 	</mx:Form>
-	
+
 </mx:Canvas>

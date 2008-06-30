@@ -4,35 +4,34 @@
 	<mx:Script>
 		<![CDATA[
 			import ormtest.model.Organisation;
-			
+
 			import nz.co.codec.flexorm.EntityManager;
-			import nz.co.codec.flexorm.IEntityManager;
-			
-			private var em:IEntityManager = EntityManager.instance;
-			
+
+			private var em:EntityManager = EntityManager.instance;
+
 			public function newItem():void
 			{
 				organisation = new Organisation();
 			}
-			
+
 			public function saveItem():void
 			{
 				em.save(organisation);
 			}
-			
+
 			public function deleteItem():void
 			{
 				em.remove(organisation);
 			}
 		]]>
 	</mx:Script>
-	
+
 	<model:Organisation id="organisation" name="{organisationName.text}"/>
-	
+
 	<mx:Form width="100%" height="100%" enabled="{organisation != null}">
 		<mx:FormItem label="Name">
 			<mx:TextInput id="organisationName" text="{organisation.name}"/>
 		</mx:FormItem>
 	</mx:Form>
-	
+
 </mx:Canvas>
