@@ -243,7 +243,13 @@ package nz.co.codec.flexorm
             var pkg:String = (j > 0)? qname.substring(0, j - 1) : null;
 
             var superType:String = xml.extendsClass[0].@type.toString();
-            if (superType != "Object")
+            j = superType.lastIndexOf(":");
+            var superPkg:String = (j > 0)? superType.substring(0, j - 1) : null;
+
+            // if superType is of the same package as the persistent entity
+            // and is not the Object base class
+            if (( pkg && superType.match(pkg)) ||
+                (!pkg && !superPkg && superType != "Object"))
             {
                 var superClass:Class = getClass(superType);
                 var superCN:String = getClassName(superClass);

@@ -136,7 +136,11 @@ package nz.co.codec.flexorm
             {
                 if (data)
                 {
-                    q.response = typeArray(data as Array, entity, q.branchNonBlocking());
+                    q.response = typeArray(data as Array, entity, q);
+
+                    // Causing an issue when fetching graphs
+                    // Operation cannot be performed while SQLStatement.executing is true.
+//                    q.response = typeArray(data as Array, entity, q.branchNonBlocking());
                 }
                 else
                 {
