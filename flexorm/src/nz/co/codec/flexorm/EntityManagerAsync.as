@@ -144,7 +144,7 @@ package nz.co.codec.flexorm
                 }
                 else
                 {
-                    q.fault(new EntityError(debug("Find all of " + entity.className + " failed")));
+                    debug("Find all of " + entity.className + " failed");
                 }
             });
             q.execute();
@@ -174,9 +174,9 @@ package nz.co.codec.flexorm
                 }
                 else
                 {
-                    q.fault(new EntityError(debug("Select one-to-many of " +
-                        a.associatedEntity.className + " with " +
-                        a.ownerEntity.fkProperty + ": " + id + " failed")));
+                    debug("Select one-to-many of " +
+                          a.associatedEntity.className + " with " +
+                          a.ownerEntity.fkProperty + ": " + id + " failed");
                 }
             });
             q.execute();
@@ -207,9 +207,9 @@ package nz.co.codec.flexorm
                 }
                 else
                 {
-                    q.fault(new EntityError(debug("Select many-to-many of " +
-                        a.associationTable + " with " +
-                        a.ownerEntity.fkProperty + ": " + id + " failed")));
+                    debug("Select many-to-many of " + a.associationTable +
+                          " with " + a.ownerEntity.fkProperty + ": " + id +
+                          " failed");
                 }
             });
             q.execute();

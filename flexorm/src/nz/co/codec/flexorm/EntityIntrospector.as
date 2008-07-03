@@ -239,17 +239,33 @@ package nz.co.codec.flexorm
                 _map[cn] = entity;
             }
             var qname:String = getQualifiedClassName(c);
-            var j:int = qname.lastIndexOf(":");
-            var pkg:String = (j > 0)? qname.substring(0, j - 1) : null;
+            var j:int = qname.indexOf("::");
+            var pkg:String = (j > 0)? qname.substring(0, j) : null;
 
             var superType:String = xml.extendsClass[0].@type.toString();
-            j = superType.lastIndexOf(":");
-            var superPkg:String = (j > 0)? superType.substring(0, j - 1) : null;
+            j = superType.indexOf("::");
+            var superPkg:String = (j > 0)? superType.substring(0, j) : null;
+            var inheritsFrom:String = StringUtil.trim(xml.metadata.(@name == Tags.ELEM_TABLE).arg.(@key == Tags.ATTR_INHERITS_FROM).@value);
+
+            if (inheritsFrom && inheritsFrom.length > 0)
+            {
+                // Check if the qualified class name is of the form pkg.className
+                // and convert it to pkg::className
+                j = inheritsFrom.indexOf("::");
+                if (j == -1)
+                {
+                    j = inheritsFrom.lastIndexOf(".");
+                    if (j > 0)
+                    {
+                        inheritsFrom = inheritsFrom.substring(0, j) + "::" + inheritsFrom.substring(j + 1);
+                    }
+                }
+            }
 
             // if superType is of the same package as the persistent entity
             // and is not the Object base class
-            if (( pkg && superType.match(pkg)) ||
-                (!pkg && !superPkg && superType != "Object"))
+            if ((pkg == superPkg && superType != "Object") ||
+                (superType == inheritsFrom))
             {
                 var superClass:Class = getClass(superType);
                 var superCN:String = getClassName(superClass);

@@ -34,5 +34,7 @@ package nz.co.codec.flexorm
 
         public static const ATTR_INDEX_COLUMN:String = "indexColumn";
 
+        public static const ATTR_INHERITS_FROM:String = "inheritsFrom";
+
     }
 }
