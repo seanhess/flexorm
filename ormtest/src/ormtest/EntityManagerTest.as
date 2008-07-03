@@ -19,11 +19,11 @@ package ormtest
     import ormtest.model.Lesson;
     import ormtest.model.Order;
     import ormtest.model.Organisation;
-    import ormtest.model.Person;
     import ormtest.model.Resource;
     import ormtest.model.Role;
     import ormtest.model.Schedule;
     import ormtest.model.Student;
+    import ormtest.model2.Person;
 
     public class EntityManagerTest extends TestCase
     {
@@ -76,12 +76,16 @@ package ormtest
         {
             trace("\nTest Find All");
             trace("=============");
-            var organisation:Organisation = new Organisation();
-            organisation.name = "Adobe";
-            em.save(organisation);
+            var adobe:Organisation = new Organisation();
+            adobe.name = "Adobe";
+            em.save(adobe);
+            var fogCreek:Organisation = new Organisation();
+            fogCreek.name = "Fog Creek";
+            em.save(fogCreek);
+
 
             var organisations:ArrayCollection = em.findAll(Organisation);
-            assertEquals(organisations.length, 2);
+            assertEquals(organisations.length, 3);
         }
 
         public function testSaveManyToOneAssociation():void

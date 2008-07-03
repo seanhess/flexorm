@@ -2,8 +2,10 @@ package ormtest.model
 {
     import mx.collections.IList;
 
+    import ormtest.model2.Person;
+
     [Bindable]
-    [Table(name="contacts")]
+    [Table(name="contacts", inheritsFrom="ormtest.model2.Person")]
     public class Contact extends Person
     {
         private var _orders:IList;

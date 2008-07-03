@@ -15,11 +15,11 @@ package ormtest
     import ormtest.model.Lesson;
     import ormtest.model.Order;
     import ormtest.model.Organisation;
-    import ormtest.model.Person;
     import ormtest.model.Resource;
     import ormtest.model.Role;
     import ormtest.model.Schedule;
     import ormtest.model.Student;
+    import ormtest.model2.Person;
 
     public class EntityManagerAsyncTest extends TestCase
     {
@@ -29,27 +29,48 @@ package ormtest
         {
             em.debugLevel = 1;
             var ts:TestSuite = new TestSuite();
+            ts.addTest(new EntityManagerAsyncTest("testNullFindAll"));
 //            ts.addTest(new EntityManagerAsyncTest("testSaveSimpleObject"));
 //            ts.addTest(new EntityManagerAsyncTest("testFindAll"));
+            ts.addTest(new EntityManagerAsyncTest("testGraphFindAll"));
 //            ts.addTest(new EntityManagerAsyncTest("testSaveManyToOneAssociation"));
 //            ts.addTest(new EntityManagerAsyncTest("testSaveOneToManyAssociations"));
 //            ts.addTest(new EntityManagerAsyncTest("testSaveManyToManyAssociation"));
 //            ts.addTest(new EntityManagerAsyncTest("testDelete"));
 //            ts.addTest(new EntityManagerAsyncTest("testCascadeSaveUpdate"));
-//            ts.addTest(new EntityManagerAsyncTest("testInheritance1"));
-//            ts.addTest(new EntityManagerAsyncTest("testInheritance2"));
+            ts.addTest(new EntityManagerAsyncTest("testInheritance1"));
+            ts.addTest(new EntityManagerAsyncTest("testInheritance2"));
 //            ts.addTest(new EntityManagerAsyncTest("testTransaction"));
 //            ts.addTest(new EntityManagerAsyncTest("testCompositeKey"));
 //            ts.addTest(new EntityManagerAsyncTest("testCompositeKeyOneToMany"));
 //            ts.addTest(new EntityManagerAsyncTest("testAlternateAPI"));
 //            ts.addTest(new EntityManagerAsyncTest("testOneToManyIndexedCollection"));
-            ts.addTest(new EntityManagerAsyncTest("testManyToManyIndexedCollection"));
+//            ts.addTest(new EntityManagerAsyncTest("testManyToManyIndexedCollection"));
             return ts;
         }
 
         public function EntityManagerAsyncTest(methodName:String=null)
         {
             super(methodName);
+        }
+
+        public function testNullFindAll():void
+        {
+            trace("\nTest Null Find All");
+            trace("==================");
+            em.findAll(Organisation, new Responder(
+                addAsync(function(event:EntityEvent):void
+                {
+                    trace("findAll fired...");
+                    assertNull(event.data);
+                }, 1500),
+
+                function(error:EntityError):void
+                {
+                    trace("Failed in select: " + error.message);
+                    trace(error.getStackTrace());
+                }
+            ));
         }
 
         public function testSaveSimpleObject():void
@@ -107,6 +128,69 @@ package ormtest
                             trace("Failed in select: " + error.message);
                             trace(error.getStackTrace());
                         }
+                    ));
+                }, 1500),
+
+                function(error:EntityError):void
+                {
+                    trace("Failed in save: " + error.message);
+                    trace(error.getStackTrace());
+                }
+            ));
+        }
+
+        public function testGraphFindAll():void
+        {
+            trace("\nTest Graph Find All");
+            trace("===================");
+            var james:Contact = new Contact();
+            james.name = "James";
+            var jamesOrders:ArrayCollection = new ArrayCollection();
+            var couch:Order = new Order();
+            couch.item = "Couch";
+            jamesOrders.addItem(couch);
+            var desk:Order = new Order();
+            desk.item = "Desk";
+            jamesOrders.addItem(desk);
+            james.orders = jamesOrders;
+            em.save(james, new Responder(
+                addAsync(function(event:EntityEvent):void
+                {
+                    trace("save james fired...");
+                    var john:Contact = new Contact();
+                    john.name = "John";
+                    var johnRoles:ArrayCollection = new ArrayCollection();
+                    var developer:Role = new Role();
+                    developer.name = "Developer";
+                    johnRoles.addItem(developer);
+                    var tester:Role = new Role();
+                    tester.name = "Tester";
+                    johnRoles.addItem(tester);
+                    john.roles = johnRoles;
+                    em.save(john, new Responder(
+                        addAsync(function(event:EntityEvent):void
+                        {
+                            trace("save john fired...");
+                            em.findAll(Contact, new Responder(
+                                addAsync(function(event:EntityEvent):void
+                                {
+                                    trace("findAll fired...");
+                                    assertEquals(event.data.length, 2);
+                                }, 1500),
+
+                                function(error:EntityError):void
+                                {
+                                    trace("Failed in select: " + error.message);
+                                    trace(error.getStackTrace());
+                                }
+                            ));
+                        }, 1500),
+
+                        function(error:EntityError):void
+                        {
+                            trace(error);
+                        }
+
                     ));
                 }, 1500),
 
