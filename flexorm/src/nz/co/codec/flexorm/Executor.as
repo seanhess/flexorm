@@ -58,9 +58,8 @@ package nz.co.codec.flexorm
             return executor;
         }
 
-        public function execute():void
-        {
-        }
+        // abstract
+        public function execute():void { }
 
         public function addCommand(value:ICommand, label:String=null):void
         {
@@ -105,9 +104,7 @@ package nz.co.codec.flexorm
         }
 
         // abstract
-        public function result(data:Object):void
-        {
-        }
+        public function result(data:Object):void { }
 
         public function fault(info:Object):void
         {

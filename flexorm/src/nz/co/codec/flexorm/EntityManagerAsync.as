@@ -1,6 +1,8 @@
 package nz.co.codec.flexorm
 {
     import flash.data.SQLConnection;
+    import flash.events.SQLErrorEvent;
+    import flash.events.SQLEvent;
     import flash.filesystem.File;
     import flash.utils.getDefinitionByName;
     import flash.utils.getQualifiedClassName;
@@ -57,20 +59,33 @@ package nz.co.codec.flexorm
             }
         }
 
-        public function openAsyncConnection(dbFilename:String):void
+        public function openAsyncConnection(dbFilename:String, responder:IResponder):void
         {
             var dbFile:File = File.applicationStorageDirectory.resolvePath(dbFilename);
             _sqlConnection = new SQLConnection();
+
+            var openHandler:Function = function(event:SQLEvent):void
+            {
+                _sqlConnection.removeEventListener(SQLEvent.OPEN, openHandler);
+                _sqlConnection.removeEventListener(SQLErrorEvent.ERROR, openHandler);
+                responder.result(event);
+            }
+            _sqlConnection.addEventListener(SQLEvent.OPEN, openHandler);
+
+            var errorHandler:Function = function(error:SQLErrorEvent):void
+            {
+                _sqlConnection.removeEventListener(SQLEvent.OPEN, errorHandler);
+                _sqlConnection.removeEventListener(SQLErrorEvent.ERROR, errorHandler);
+                responder.fault(error);
+            }
+            _sqlConnection.addEventListener(SQLErrorEvent.ERROR, errorHandler);
+
             _sqlConnection.openAsync(dbFile);
             introspector = null;
         }
 
         override public function get sqlConnection():SQLConnection
         {
-            if (_sqlConnection == null)
-            {
-                openAsyncConnection("default.db");
-            }
             return _sqlConnection;
         }
 

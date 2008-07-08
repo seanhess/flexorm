@@ -14,8 +14,7 @@ package nz.co.codec.flexorm.command
         {
             super(table, sqlConnection, debugLevel);
             _statement.text = "select t." + idColumn +
-                ",t.server_id from main." + table +
-                " t where t.server_id > 0";
+                ",t.server_id,t.version from main." + table + " t";
         }
 
         override public function execute():void

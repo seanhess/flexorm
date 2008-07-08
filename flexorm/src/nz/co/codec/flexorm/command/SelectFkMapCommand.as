@@ -25,7 +25,7 @@ package nz.co.codec.flexorm.command
             {
                 sql += "t." + column + ",";
             }
-            sql = sql.substring(0, sql.length - 1); // remove last comma
+            sql += "t.version";
             sql += " from " + _table + " t";
         }
 

@@ -25,6 +25,27 @@ package nz.co.codec.flexorm.util
             return retval;
         }
 
+        public static function convertCamelCaseToSpaced(name:String):String
+        {
+            var retval:String = "";
+            for (var i:int = 0; i < name.length; i++)
+            {
+                if (i > 0 && isUpperCase(name, i))
+                {
+                    retval += " " + name.charAt(i).toLowerCase();
+                }
+                else if (i > 0 && isNumber(name, i))
+                {
+                    retval += " " + name.charAt(i);
+                }
+                else
+                {
+                    retval += name.charAt(i);
+                }
+            }
+            return retval;
+        }
+
         public static function camelCase(name:String):String
         {
             var retval:String = "";

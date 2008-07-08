@@ -718,12 +718,18 @@ package nz.co.codec.flexorm
             createCommand.addColumn("marked_for_deletion", SQLType.BOOLEAN);
             createCommandAsync.addColumn("marked_for_deletion", SQLType.BOOLEAN);
 
-            if (_syncSupport && !entity.hasCompositeKey())
+            if (_syncSupport)
             {
-                insertCommand.addColumn("server_id", "serverId");
-                createCommand.addColumn("server_id", SQLType.INTEGER);
-                createCommandAsync.addColumn("server_id", SQLType.INTEGER);
-            }
+                insertCommand.addColumn("version", "version");
+                createCommand.addColumn("version", SQLType.INTEGER);
+                createCommandAsync.addColumn("version", SQLType.INTEGER);
+                if (!entity.hasCompositeKey())
+                {
+                    insertCommand.addColumn("server_id", "serverId");
+                    createCommand.addColumn("server_id", SQLType.INTEGER);
+                    createCommandAsync.addColumn("server_id", SQLType.INTEGER);
+                }
+           }
 
             var column:Object;
             var fkIndexCommand:CreateIndexCommand;

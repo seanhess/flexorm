@@ -479,6 +479,7 @@ package nz.co.codec.flexorm
 
             if (syncSupport && !entity.hasCompositeKey())
             {
+                insertCommand.setParam("version", 0);
                 insertCommand.setParam("serverId", 0);
             }
             insertCommand.setParam("markedForDeletion", false);
@@ -962,6 +963,12 @@ package nz.co.codec.flexorm
             }
             selectCommand.execute();
             return typeArray(selectCommand.result, a.associatedEntity);
+        }
+
+        public function createCriteria(c:Class):Criteria
+        {
+            var entity:Entity = getEntity(c);
+            return new Criteria(entity, sqlConnection, debugLevel);
         }
 
     }

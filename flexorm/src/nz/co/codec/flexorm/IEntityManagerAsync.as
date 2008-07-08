@@ -28,7 +28,7 @@ package nz.co.codec.flexorm
 
         function makePersistent(c:Class):void;
 
-        function openAsyncConnection(dbFilename:String):void
+        function openAsyncConnection(dbFilename:String, responder:IResponder):void
 
         function set sqlConnection(value:SQLConnection):void;
 
