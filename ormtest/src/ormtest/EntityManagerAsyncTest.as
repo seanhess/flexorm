@@ -29,17 +29,17 @@ package ormtest
         {
             em.debugLevel = 1;
             var ts:TestSuite = new TestSuite();
-            ts.addTest(new EntityManagerAsyncTest("testNullFindAll"));
-//            ts.addTest(new EntityManagerAsyncTest("testSaveSimpleObject"));
-//            ts.addTest(new EntityManagerAsyncTest("testFindAll"));
-            ts.addTest(new EntityManagerAsyncTest("testGraphFindAll"));
+//            ts.addTest(new EntityManagerAsyncTest("testNullFindAll"));
+            ts.addTest(new EntityManagerAsyncTest("testSaveSimpleObject"));
+            ts.addTest(new EntityManagerAsyncTest("testFindAll"));
+//            ts.addTest(new EntityManagerAsyncTest("testGraphFindAll"));
 //            ts.addTest(new EntityManagerAsyncTest("testSaveManyToOneAssociation"));
 //            ts.addTest(new EntityManagerAsyncTest("testSaveOneToManyAssociations"));
 //            ts.addTest(new EntityManagerAsyncTest("testSaveManyToManyAssociation"));
 //            ts.addTest(new EntityManagerAsyncTest("testDelete"));
 //            ts.addTest(new EntityManagerAsyncTest("testCascadeSaveUpdate"));
-            ts.addTest(new EntityManagerAsyncTest("testInheritance1"));
-            ts.addTest(new EntityManagerAsyncTest("testInheritance2"));
+//            ts.addTest(new EntityManagerAsyncTest("testInheritance1"));
+//            ts.addTest(new EntityManagerAsyncTest("testInheritance2"));
 //            ts.addTest(new EntityManagerAsyncTest("testTransaction"));
 //            ts.addTest(new EntityManagerAsyncTest("testCompositeKey"));
 //            ts.addTest(new EntityManagerAsyncTest("testCompositeKeyOneToMany"));

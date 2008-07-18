@@ -1,25 +1,26 @@
 package ormtest.model
 {
-	import mx.core.IUID;
+    import mx.core.IUID;
 
-	[Bindable]
-	public dynamic class Organisation implements IUID
-	{
-		[Id]
-		public var id:int;
+    [Bindable]
+    [Table(name="Company")]
+    public dynamic class Organisation implements IUID
+    {
+        [Id]
+        public var id:int;
 
-		public var name:String;
+        public var name:String;
 
-		[Transient]
-		public function set uid(value:String):void
-		{
-			id = int(value);
-		}
+        [Transient]
+        public function set uid(value:String):void
+        {
+            id = int(value);
+        }
 
-		public function get uid():String
-		{
-			return id.toString();
-		}
+        public function get uid():String
+        {
+            return id.toString();
+        }
 
-	}
+    }
 }

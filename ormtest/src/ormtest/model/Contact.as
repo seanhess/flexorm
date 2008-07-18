@@ -5,7 +5,7 @@ package ormtest.model
     import ormtest.model2.Person;
 
     [Bindable]
-    [Table(name="contacts", inheritsFrom="ormtest.model2.Person")]
+    [Table(name="my_friends", inheritsFrom="ormtest.model2.Person")]
     public class Contact extends Person
     {
         private var _orders:IList;
@@ -22,7 +22,7 @@ package ormtest.model
         [ManyToOne(cascade="none")]
         public var organisation:Organisation;
 
-        [OneToMany(type="ormtest.model.Order", cascade="save-update", constrain="false", lazy="false", indexed="true")]
+        [OneToMany(type="ormtest.model.Order", fkColumn="my_contact_id", cascade="save-update", constrain="false", lazy="false", indexed="true")]
         public function set orders(value:IList):void
         {
             _orders = value;

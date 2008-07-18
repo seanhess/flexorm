@@ -1,109 +1,109 @@
 <?xml version="1.0" encoding="utf-8"?>
 <mx:Canvas xmlns:mx="http://www.adobe.com/2006/mxml" width="100%" height="100%"
-	xmlns:comp="net.sf.bootstrap.framework.flex.component.*"
-	xmlns:toolbox="com.flextoolbox.controls.*"
-	label="{contact.name}" xmlns:model="ormtest.model.*">
-	<mx:Script>
-		<![CDATA[
-			import mx.collections.ArrayCollection;
-			import mx.collections.IList;
+    xmlns:ui="nz.co.codec.components.*"
+    xmlns:toolbox="com.flextoolbox.controls.*"
+    label="{contact.name}" xmlns:model="ormtest.model.*">
+    <mx:Script>
+        <![CDATA[
+            import mx.collections.ArrayCollection;
+            import mx.collections.IList;
 
-			import ormtest.model.Contact;
-			import ormtest.model.Organisation;
-			import ormtest.model.Role;
+            import ormtest.model.Contact;
+            import ormtest.model.Organisation;
+            import ormtest.model.Role;
 
-			import nz.co.codec.flexorm.EntityManager;
+            import nz.co.codec.flexorm.EntityManager;
 
-			private var em:EntityManager = EntityManager.instance;
+            private var em:EntityManager = EntityManager.instance;
 
-			[Bindable]
-			public var organisations:ArrayCollection;
+            [Bindable]
+            public var organisations:ArrayCollection;
 
-			private var _roles:ArrayCollection;
+            private var _roles:ArrayCollection;
 
-			private var _contact:Contact;
+            private var _contact:Contact;
 
-			[Bindable]
-			public function set roles(value:ArrayCollection):void
-			{
-				_roles = value;
-				dispatchEvent(new Event("changeSelectedRoleIndices"));
-			}
+            [Bindable]
+            public function set roles(value:ArrayCollection):void
+            {
+                _roles = value;
+                dispatchEvent(new Event("changeSelectedRoleIndices"));
+            }
 
-			public function get roles():ArrayCollection
-			{
-				return _roles;
-			}
+            public function get roles():ArrayCollection
+            {
+                return _roles;
+            }
 
-			[Bindable]
-			public function set contact(value:Contact):void
-			{
-				_contact = value;
-				dispatchEvent(new Event("changeSelectedRoleIndices"));
-			}
+            [Bindable]
+            public function set contact(value:Contact):void
+            {
+                _contact = value;
+                dispatchEvent(new Event("changeSelectedRoleIndices"));
+            }
 
-			public function get contact():Contact
-			{
-				return _contact;
-			}
+            public function get contact():Contact
+            {
+                return _contact;
+            }
 
-			[Bindable(event="changeSelectedRoleIndices")]
-			private function getSelectedRoleIndices():Array
-			{
-				var result:Array = new Array();
-				if (roles && contact)
-				{
-					for each(var r:Role in contact.roles)
-					{
-						for (var i:int = 0; i < roles.length; i++)
-						{
-							if (roles[i].id == r.id)
-							{
-								result.push(i);
-							}
-						}
-					}
-				}
-				return result;
-			}
+            [Bindable(event="changeSelectedRoleIndices")]
+            private function getSelectedRoleIndices():Array
+            {
+                var result:Array = new Array();
+                if (roles && contact)
+                {
+                    for each(var r:Role in contact.roles)
+                    {
+                        for (var i:int = 0; i < roles.length; i++)
+                        {
+                            if (roles[i].id == r.id)
+                            {
+                                result.push(i);
+                            }
+                        }
+                    }
+                }
+                return result;
+            }
 
-			public function newItem():void
-			{
-				contact = new Contact();
-			}
+            public function newItem():void
+            {
+                contact = new Contact();
+            }
 
-			public function saveItem():void
-			{
-				contact.name = contactName.text;
-				contact.emailAddr = emailAddr.text;
-				contact.organisation = organisation.selectedItem as Organisation;
-				contact.roles = new ArrayCollection(checkList.selectedItems);
-				em.save(contact);
-			}
+            public function saveItem():void
+            {
+                contact.name = contactName.text;
+                contact.emailAddr = emailAddr.text;
+                contact.organisation = organisation.selectedItem as Organisation;
+                contact.roles = new ArrayCollection(checkList.selectedItems);
+                em.save(contact);
+            }
 
-			public function deleteItem():void
-			{
-				em.remove(contact);
-			}
-		]]>
-	</mx:Script>
+            public function deleteItem():void
+            {
+                em.remove(contact);
+            }
+        ]]>
+    </mx:Script>
 
-	<mx:Form width="100%" height="100%" enabled="{contact != null}">
-		<mx:FormItem label="Name:">
-			<mx:TextInput id="contactName" text="{contact.name}"/>
-		</mx:FormItem>
-		<mx:FormItem label="Email Address:">
-			<mx:TextInput id="emailAddr" text="{contact.emailAddr}"/>
-		</mx:FormItem>
-		<mx:FormItem label="Organisation:">
-			<comp:ComboBox id="organisation" dataProvider="{organisations}"
-				value="{contact.organisation}" labelField="name"/>
-		</mx:FormItem>
-		<mx:FormItem label="Roles:">
-			<toolbox:CheckBoxList id="checkList" width="159" height="71"
-				dataProvider="{roles}" labelField="name"
-				selectedIndices="{getSelectedRoleIndices()}"/>
-		</mx:FormItem>
-	</mx:Form>
+    <mx:Form width="100%" height="100%" enabled="{contact != null}">
+        <mx:FormItem label="Name:">
+            <mx:TextInput id="contactName" text="{contact.name}"/>
+        </mx:FormItem>
+        <mx:FormItem label="Email Address:">
+            <mx:TextInput id="emailAddr" text="{contact.emailAddr}"/>
+        </mx:FormItem>
+        <mx:FormItem label="Organisation:">
+            <ui:ComboBox id="organisation" dataProvider="{organisations}"
+                value="{contact.organisation}" labelField="name"/>
+        </mx:FormItem>
+        <mx:FormItem label="Roles:">
+            <toolbox:CheckBoxList id="checkList" width="159" height="71"
+                dataProvider="{roles}" labelField="name"
+                selectedIndices="{getSelectedRoleIndices()}"/>
+        </mx:FormItem>
+    </mx:Form>
 
 </mx:Canvas>

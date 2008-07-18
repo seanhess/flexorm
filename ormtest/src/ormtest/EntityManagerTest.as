@@ -16,6 +16,7 @@ package ormtest
     import ormtest.model.E;
     import ormtest.model.F;
     import ormtest.model.G;
+    import ormtest.model.Gallery;
     import ormtest.model.Lesson;
     import ormtest.model.Order;
     import ormtest.model.Organisation;
@@ -52,6 +53,7 @@ package ormtest
             ts.addTest(new EntityManagerTest("testSaveUntypedObject"));
             ts.addTest(new EntityManagerTest("testSaveManyToOneUntypedObject"));
             ts.addTest(new EntityManagerTest("testSaveOneToManyUntypedObject"));
+            ts.addTest(new EntityManagerTest("testRecursiveJoin"));
             return ts;
         }
 
@@ -513,6 +515,28 @@ package ormtest
 
             var loadedObject:Object = em.loadObject("test", handle);
             assertEquals(loadedObject.myList[0].another.type, "some type");
+        }
+
+        public function testRecursiveJoin():void
+        {
+            trace("\nTest Recursive Join");
+            trace("===================");
+
+            var g1:Gallery = new Gallery();
+            g1.name = "A";
+
+            var g2:Gallery = new Gallery();
+            g2.name = "B";
+
+            var g3:Gallery = new Gallery();
+            g3.name = "C";
+            g3.parent = g2;
+            g2.parent = g1;
+            em.save(g3);
+
+            var loadedGallery:Gallery = em.loadItem(Gallery, g3.id) as Gallery;
+            assertEquals(loadedGallery.name, "C");
+            assertEquals(loadedGallery.parent.parent.name, "A");
         }
 
     }

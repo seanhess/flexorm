@@ -1,6 +1,7 @@
 package ormtest.model2
 {
     [Bindable]
+    [Table(name="human_being")]
     public class Person
     {
         [Id]
