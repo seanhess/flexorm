@@ -23,6 +23,7 @@ package nz.co.codec.flexorm
     import nz.co.codec.flexorm.command.SelectManyToManyIndicesCommand;
     import nz.co.codec.flexorm.command.SelectUnsynchronisedCommand;
     import nz.co.codec.flexorm.command.UpdateCommand;
+    import nz.co.codec.flexorm.command.UpdateVersionCommand;
     import nz.co.codec.flexorm.metamodel.Association;
     import nz.co.codec.flexorm.metamodel.CompositeIdentity;
     import nz.co.codec.flexorm.metamodel.Entity;
@@ -220,12 +221,6 @@ package nz.co.codec.flexorm
 
         private function loadMetadataForClass(c:Class, table:String):Entity
         {
-            var xml:XML = describeType(new c());
-            var tableName:String = StringUtil.trim(xml.metadata.(@name == Tags.ELEM_TABLE).arg.(@key == Tags.ATTR_NAME).@value);
-            if (tableName && tableName.length > 0)
-            {
-                table = tableName;
-            }
             var cn:String = getClassName(c);
             var entity:Entity = _map[cn];
             if (entity)
@@ -235,9 +230,19 @@ package nz.co.codec.flexorm
             }
             else
             {
-                entity = new Entity(c, _namingStrategy, table);
+                entity = new Entity();
+                entity.cls = c;
+                entity.namingStrategy = _namingStrategy;
                 _map[cn] = entity;
             }
+            var xml:XML = describeType(new c());
+            var tableName:String = StringUtil.trim(xml.metadata.(@name == Tags.ELEM_TABLE).arg.(@key == Tags.ATTR_NAME).@value);
+            if (tableName && tableName.length > 0)
+            {
+                table = tableName;
+            }
+            entity.table = table;
+
             var qname:String = getQualifiedClassName(c);
             var j:int = qname.indexOf("::");
             var pkg:String = (j > 0)? qname.substring(0, j) : null;
@@ -272,7 +277,9 @@ package nz.co.codec.flexorm
                 var superEntity:Entity = _map[superCN];
                 if (superEntity == null)
                 {
-                    superEntity = new Entity(superClass, _namingStrategy);
+                    superEntity = new Entity();
+                    superEntity.cls = superClass;
+                    superEntity.namingStrategy = _namingStrategy;
                     _map[superCN] = superEntity;
                     _deferred.push({ type: superClass, table: null });
                 }
@@ -324,17 +331,26 @@ package nz.co.codec.flexorm
                 else if (v.metadata.(@name == Tags.ELEM_MANY_TO_ONE).length() > 0)
                 {
                     metadata = v.metadata.(@name == Tags.ELEM_MANY_TO_ONE);
-                    column = metadata.arg.(@key == Tags.ATTR_NAME).@value.toString();
+                    column = StringUtil.trim(metadata.arg.(@key == Tags.ATTR_NAME).@value.toString());
                     cascadeType = metadata.arg.(@key == Tags.ATTR_CASCADE).@value;
                     inverse = StringUtils.parseBoolean(metadata.arg.(@key == Tags.ATTR_INVERSE).@value.toString(), false);
                     constrain = StringUtils.parseBoolean(metadata.arg.(@key == Tags.ATTR_CONSTRAIN).@value.toString(), true);
                     associatedEntity = _map[typeCN];
+
                     if (associatedEntity == null)
                     {
-                        associatedEntity = new Entity(type, _namingStrategy);
+                        associatedEntity = new Entity();
+                        associatedEntity.cls = type;
+                        associatedEntity.namingStrategy = _namingStrategy;
                         _map[typeCN] = associatedEntity;
                         _deferred.push({ type: type, table: null });
                     }
+
+                    if (column == null || column.length == 0)
+                    {
+                        column = associatedEntity.fkColumn;
+                    }
+                    fkProperty = StringUtils.camelCase(column);
 
                     if (v.metadata.(@name == Tags.ELEM_ID).length() > 0)
                     {
@@ -348,6 +364,8 @@ package nz.co.codec.flexorm
 
                     entity.addManyToOneAssociation(new Association({
                         property: property,
+                        fkColumn: column,
+                        fkProperty: fkProperty,
                         associatedEntity: associatedEntity,
                         cascadeType: cascadeType,
                         inverse: inverse,
@@ -392,7 +410,9 @@ package nz.co.codec.flexorm
                     associatedEntity = _map[typeCN];
                     if (associatedEntity == null)
                     {
-                        associatedEntity = new Entity(type, _namingStrategy);
+                        associatedEntity = new Entity();
+                        associatedEntity.cls = type;
+                        associatedEntity.namingStrategy = _namingStrategy;
                         _map[typeCN] = associatedEntity;
                         _deferred.push({ type: type, table: null });
                     }
@@ -446,7 +466,9 @@ package nz.co.codec.flexorm
                     associatedEntity = _map[typeCN];
                     if (associatedEntity == null)
                     {
-                        associatedEntity = new Entity(type, _namingStrategy);
+                        associatedEntity = new Entity();
+                        associatedEntity.cls = type;
+                        associatedEntity.namingStrategy = _namingStrategy;
                         _map[typeCN] = associatedEntity;
                         _deferred.push({ type: type, table: null });
                     }
@@ -479,7 +501,9 @@ package nz.co.codec.flexorm
                     associatedEntity = _map[typeCN];
                     if (associatedEntity == null)
                     {
-                        associatedEntity = new Entity(type, _namingStrategy);
+                        associatedEntity = new Entity();
+                        associatedEntity.cls = type;
+                        associatedEntity.namingStrategy = _namingStrategy;
                         _map[typeCN] = associatedEntity;
                         _deferred.push({ type: type, table: null });
                     }
@@ -502,7 +526,9 @@ package nz.co.codec.flexorm
                     associatedEntity = _map[typeCN];
                     if (associatedEntity == null)
                     {
-                        associatedEntity = new Entity(type, _namingStrategy);
+                        associatedEntity = new Entity();
+                        associatedEntity.cls = type;
+                        associatedEntity.namingStrategy = _namingStrategy;
                         _map[typeCN] = associatedEntity;
                         _deferred.push({ type: type, table: null });
                     }
@@ -648,9 +674,11 @@ package nz.co.codec.flexorm
             var indexName:String;
 
             var selectUnsynchronisedCommand:SelectUnsynchronisedCommand = null;
+            var updateVersionCommand:UpdateVersionCommand = null;
             if (_syncSupport)
             {
                 selectUnsynchronisedCommand = new SelectUnsynchronisedCommand(table, _sqlConnection, _debugLevel);
+                updateVersionCommand = new UpdateVersionCommand(table, _sqlConnection, _debugLevel);
             }
 
             var selectIdMapCommand:SelectIdMapCommand = null;
@@ -693,6 +721,10 @@ package nz.co.codec.flexorm
                 updateCommand.addFilter(key.column, key.property);
                 deleteCommand.addFilter(key.column, key.property);
                 markForDeletionCommand.addFilter(key.column, key.property);
+                if (_syncSupport)
+                {
+                    updateVersionCommand.addFilter(key.column, key.property);
+                }
             }
 
             for each(var f:Field in entity.fields)
@@ -738,21 +770,40 @@ package nz.co.codec.flexorm
             {
                 indexName = indexTableName + "_" + a.associatedEntity.tableSingular + "_idx";
                 fkIndexCommand = new CreateIndexCommand(table, indexName, _sqlConnection, _debugLevel);
-                for each(key in a.associatedEntity.keys)
+                if (a.associatedEntity.hasCompositeKey())
                 {
-                    insertCommand.addColumn(key.fkColumn, key.fkProperty);
-                    updateCommand.addColumn(key.fkColumn, key.fkProperty);
+                    for each(key in a.associatedEntity.keys)
+                    {
+                        insertCommand.addColumn(key.fkColumn, key.fkProperty);
+                        updateCommand.addColumn(key.fkColumn, key.fkProperty);
+                        if (a.constrain)
+                        {
+                            createCommand.addFkColumn(key.fkColumn, SQLType.INTEGER, a.associatedEntity.table, key.column);
+                            createCommandAsync.addFkColumn(key.fkColumn, SQLType.INTEGER, a.associatedEntity.table, key.column);
+                        }
+                        else
+                        {
+                            createCommand.addColumn(key.fkColumn, SQLType.INTEGER);
+                            createCommandAsync.addColumn(key.fkColumn, SQLType.INTEGER);
+                        }
+                        fkIndexCommand.addIndexColumn(key.fkColumn);
+                    }
+                }
+                else
+                {
+                    insertCommand.addColumn(a.fkColumn, a.fkProperty);
+                    updateCommand.addColumn(a.fkColumn, a.fkProperty);
                     if (a.constrain)
                     {
-                        createCommand.addFkColumn(key.fkColumn, SQLType.INTEGER, a.associatedEntity.table, key.column);
-                        createCommandAsync.addFkColumn(key.fkColumn, SQLType.INTEGER, a.associatedEntity.table, key.column);
+                        createCommand.addFkColumn(a.fkColumn, SQLType.INTEGER, a.associatedEntity.table, a.associatedEntity.pk.column);
+                        createCommandAsync.addFkColumn(a.fkColumn, SQLType.INTEGER, a.associatedEntity.table, a.associatedEntity.pk.column);
                     }
                     else
                     {
-                        createCommand.addColumn(key.fkColumn, SQLType.INTEGER);
-                        createCommandAsync.addColumn(key.fkColumn, SQLType.INTEGER);
+                        createCommand.addColumn(a.fkColumn, SQLType.INTEGER);
+                        createCommandAsync.addColumn(a.fkColumn, SQLType.INTEGER);
                     }
-                    fkIndexCommand.addIndexColumn(key.fkColumn);
+                    fkIndexCommand.addIndexColumn(a.fkColumn);
                 }
                 indexCommands.push(fkIndexCommand);
             }
@@ -958,8 +1009,9 @@ package nz.co.codec.flexorm
             entity.createCommandAsync = createCommandAsync;
             entity.selectIdMapCommand = selectIdMapCommand;
             entity.selectFkMapCommand = selectFkMapCommand;
-            entity.selectUnsynchronisedCommand = selectUnsynchronisedCommand;
             entity.markForDeletionCommand = markForDeletionCommand;
+            entity.selectUnsynchronisedCommand = selectUnsynchronisedCommand;
+            entity.updateVersionCommand = updateVersionCommand;
             entity.indexCommands = indexCommands;
         }
 
@@ -1021,7 +1073,11 @@ package nz.co.codec.flexorm
             var entity:Entity = _map[name];
             if (entity == null)
             {
-                entity = new Entity(c, _namingStrategy, name, root);
+                entity = new Entity();
+                entity.cls = c;
+                entity.namingStrategy = _namingStrategy;
+                entity.root = root; // must be set before entity.table
+                entity.table = name;
                 _map[name] = entity;
             }
             var deferred:Array = [];
@@ -1037,6 +1093,7 @@ package nz.co.codec.flexorm
                     column = StringUtils.underscore(property);
                 }
 
+                var associatedEntity:Entity;
                 var value:Object = obj[property];
                 if (value)
                 {
@@ -1044,25 +1101,35 @@ package nz.co.codec.flexorm
                     var propertyClassName:String = getClassName(propertyClass);
                     if (propertyClassName == "Object")
                     {
+                        associatedEntity = loadMetadataForObject(value, property, root);
                         entity.addManyToOneAssociation(new Association({
                             property: property,
-                            associatedEntity: loadMetadataForObject(value, property, root)
+                            associatedEntity: associatedEntity,
+                            fkColumn: associatedEntity.fkColumn,
+                            fkProperty: associatedEntity.fkProperty
                         }));
                     }
 
                     else if ((value is Array || value is ArrayCollection) &&
                              (value.length > 0))
                     {
-                        var item:Object = value[0]; // only need one sample object
+                        for each(var item:Object in value)
+                        {
+                            if (item) // only need one sample object
+                                break;
+                        }
                         var itemClass:Class = Class(getDefinitionByName(getQualifiedClassName(item)));
                         var itemClassName:String = getClassName(itemClass);
-                        var associatedEntity:Entity;
                         if (itemClassName == "Object")
                         {
                             associatedEntity = _map[property];
                             if (associatedEntity == null)
                             {
-                                associatedEntity = new Entity(itemClass, _namingStrategy, property, root);
+                                associatedEntity = new Entity();
+                                associatedEntity.cls = itemClass;
+                                associatedEntity.namingStrategy = _namingStrategy;
+                                associatedEntity.root = root;     // must set before entity.table
+                                associatedEntity.table = property;
                                 _map[property] = associatedEntity;
                                 deferred.push({ type: item, name: property });
                             }
@@ -1072,7 +1139,9 @@ package nz.co.codec.flexorm
                             associatedEntity = _map[itemClassName];
                             if (associatedEntity == null)
                             {
-                                associatedEntity = new Entity(itemClass, _namingStrategy);
+                                associatedEntity = new Entity();
+                                associatedEntity.cls = itemClass;
+                                associatedEntity.namingStrategy = _namingStrategy;
                                 _map[itemClassName] = associatedEntity;
                                 deferred.push({ type: itemClass, name: null });
                             }

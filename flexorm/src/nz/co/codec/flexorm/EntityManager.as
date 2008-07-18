@@ -542,6 +542,7 @@ package nz.co.codec.flexorm
 
             if (syncSupport && !superEntity.hasCompositeKey())
             {
+                superInsertCommand.setParam("version", 0);
                 superInsertCommand.setParam("serverId", 0);
             }
             superInsertCommand.setParam("markedForDeletion", false);
@@ -792,7 +793,14 @@ package nz.co.codec.flexorm
                 if (isCascadeDelete(a))
                 {
                     var deleteCommand:DeleteCommand = a.deleteCommand;
-                    setKeyParams(deleteCommand, obj, entity);
+                    if (entity.hasCompositeKey())
+                    {
+                        setKeyParams(deleteCommand, obj, entity);
+                    }
+                    else
+                    {
+                        deleteCommand.setParam(a.fkProperty, obj[entity.pk.property]);
+                    }
                     deleteCommand.execute();
                 }
                 // TODO else set the FK to 0 ?
@@ -891,22 +899,31 @@ package nz.co.codec.flexorm
         {
             for each(var a:Association in entity.manyToOneAssociations)
             {
-                var associatedEntity:Entity = a.associatedEntity;
-                var value:Object = getCachedValue(associatedEntity, getFkMap(row, associatedEntity));
+                var value:Object = getCachedAssociationValue(a, row);
                 if (value)
                 {
                     instance[a.property] = value;
                 }
                 else
                 {
-                    var keyMap:Object = getKeyMap(row, associatedEntity);
+                    var associatedEntity:Entity = a.associatedEntity;
+                    var keyMap:Object;
+                    if (associatedEntity.hasCompositeKey())
+                    {
+                        keyMap = getKeyMap(row, associatedEntity);
+                    }
+                    else
+                    {
+                        keyMap = new Object();
+                        keyMap[associatedEntity.pk.property] = row[a.fkColumn];
+                    }
                     if (keyMap)
                     {
+                        // loadItems may return an empty collection if
+                        // a.ownerEntity (FK) has been deleted and the
+                        // association was not set to 'cascade-delete'
                         var items:ArrayCollection = loadItems(associatedEntity.selectCommand, keyMap, associatedEntity);
 
-                        // loadItems may return an empty collection if
-                        // a.ownerEntity (fk) has been deleted and the
-                        // association was not set to 'cascade-delete'
                         instance[a.property] = (items.length > 0)? items[0] : null;
                     }
                 }
@@ -946,9 +963,16 @@ package nz.co.codec.flexorm
         private function selectOneToManyAssociation(a:OneToManyAssociation, row:Object, name:String=null):ArrayCollection
         {
             var selectCommand:SelectCommand = a.selectCommand;
-            for each(var key:Key in a.ownerEntity.keys)
+            if (a.ownerEntity.hasCompositeKey())
             {
-                selectCommand.setParam(key.fkProperty, row[key.column]);
+                for each(var key:Key in a.ownerEntity.keys)
+                {
+                    selectCommand.setParam(key.fkProperty, row[key.column]);
+                }
+            }
+            else
+            {
+                selectCommand.setParam(a.fkProperty, row[a.ownerEntity.pk.column]);
             }
             selectCommand.execute();
             return typeArray(selectCommand.result, a.associatedEntity);

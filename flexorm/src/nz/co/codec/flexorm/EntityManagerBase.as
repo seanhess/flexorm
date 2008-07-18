@@ -127,7 +127,23 @@ package nz.co.codec.flexorm
         {
             for each(var a:Association in entity.manyToOneAssociations)
             {
-                setFkParams(command, obj[a.property], a.associatedEntity);
+                var associatedEntity:Entity = a.associatedEntity;
+                var value:Object = obj[a.property];
+                if (associatedEntity.hasCompositeKey())
+                {
+                    setFkParams(command, value, associatedEntity);
+                }
+                else
+                {
+                    if (value == null)
+                    {
+                        command.setParam(a.fkProperty, 0);
+                    }
+                    else
+                    {
+                        command.setParam(a.fkProperty, value[associatedEntity.pk.property]);
+                    }
+                }
             }
         }
 
@@ -249,6 +265,21 @@ package nz.co.codec.flexorm
                 cacheKey[key.fkProperty] = key.getIdValue(obj);
             }
             return cacheKey;
+        }
+
+        protected function getCachedAssociationValue(a:Association, row:Object):Object
+        {
+            var associatedEntity:Entity = a.associatedEntity;
+            if (associatedEntity.hasCompositeKey())
+            {
+                return getCachedValue(associatedEntity, getFkMap(row, associatedEntity));
+            }
+            else
+            {
+                var cacheKey:Object = new Object();
+                cacheKey[associatedEntity.fkProperty] = row[a.fkColumn];
+                return getCachedValue(associatedEntity, cacheKey);
+            }
         }
 
         protected function getCachedValue(entity:Entity, cacheKey:Object):Object

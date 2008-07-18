@@ -16,6 +16,7 @@ package nz.co.codec.flexorm.metamodel
     import nz.co.codec.flexorm.command.SelectIdMapCommand;
     import nz.co.codec.flexorm.command.SelectUnsynchronisedCommand;
     import nz.co.codec.flexorm.command.UpdateCommand;
+    import nz.co.codec.flexorm.command.UpdateVersionCommand;
     import nz.co.codec.flexorm.util.Inflector;
     import nz.co.codec.flexorm.util.StringUtils;
 
@@ -42,6 +43,8 @@ package nz.co.codec.flexorm.metamodel
         public var selectUnsynchronisedCommand:SelectUnsynchronisedCommand;
 
         public var markForDeletionCommand:MarkForDeletionCommand;
+
+        public var updateVersionCommand:UpdateVersionCommand;
 
         public var indexCommands:Array;
 
@@ -83,62 +86,11 @@ package nz.co.codec.flexorm.metamodel
 
         private var _namingStrategy:String;
 
-        /**
-         * Flag to indicate whether the loading of metadata for an entity has
-         * been completed.
-         */
-        public var initialisationComplete:Boolean;
+        private var _initialisationComplete:Boolean;
 
-        public function Entity(
-            c:Class,
-            namingStrategy:String=NamingStrategy.UNDERSCORE_NAMES,
-            name:String=null,
-            root:String=null)
+        public function Entity()
         {
-            _cls = c;
-            _className = getClassName(c);
-            _namingStrategy = namingStrategy;
-
-            if (namingStrategy == NamingStrategy.CAMEL_CASE_NAMES)
-            {
-                if (name)
-                {
-                    _tableSingular = Inflector.singularize(StringUtils.camelCase(name));
-                }
-                else
-                {
-                    _tableSingular = _className;
-                }
-                _table = _tableSingular;
-                _fkColumn = StringUtils.startLowerCase(_tableSingular) + "Id";
-                _fkProperty = _fkColumn;
-            }
-            else
-            {
-                if (name)
-                {
-                    _tableSingular = Inflector.singularize(StringUtils.underscore(name)).toLowerCase();
-                    _table = Inflector.pluralize(StringUtils.underscore(name)).toLowerCase();
-                }
-                else
-                {
-                    _tableSingular = StringUtils.underscore(_className).toLowerCase();
-                    _table = Inflector.pluralize(_tableSingular);
-                }
-                _fkColumn = _tableSingular + "_id";
-                if (root)
-                {
-                    _fkProperty = StringUtils.startLowerCase(Inflector.singularize(StringUtils.camelCase(name))) + "Id";
-                }
-                else
-                {
-                    _fkProperty = StringUtils.startLowerCase(_className) + "Id";
-                }
-            }
-
-            _name = isDynamicObject()? name : _className;
-            _root = root;
-
+            _namingStrategy = NamingStrategy.UNDERSCORE_NAMES;
             initialisationComplete = false;
         }
 
@@ -149,19 +101,41 @@ package nz.co.codec.flexorm.metamodel
             return _name;
         }
 
+        /**
+         * Flag to indicate whether the loading of metadata for an entity has
+         * been completed.
+         */
+        public function set initialisationComplete(value:Boolean):void
+        {
+            if (value)
+            {
+                if (_className == null || _table == null || _name == null)
+                {
+                    throw new Error("Entity not initialised");
+                }
+            }
+            _initialisationComplete = value;
+        }
+
+        public function get initialisationComplete():Boolean
+        {
+            return _initialisationComplete;
+        }
+
+        public function set cls(value:Class):void
+        {
+            _cls = value;
+            _className = getClassName(value);
+        }
+
         public function get cls():Class
         {
             return _cls;
         }
 
-        public function get name():String
+        public function set namingStrategy(value:String):void
         {
-            return _name;
-        }
-
-        public function get root():String
-        {
-            return _root;
+            _namingStrategy = value;
         }
 
         public function get className():String
@@ -172,6 +146,19 @@ package nz.co.codec.flexorm.metamodel
         public function isDynamicObject():Boolean
         {
             return (_className == "Object");
+        }
+
+        public function set table(value:String):void
+        {
+            if (value)
+            {
+                setName(value);
+            }
+            else
+            {
+                setNameDefault();
+            }
+            _name = isDynamicObject()? value : _className;
         }
 
         public function get table():String
@@ -192,6 +179,70 @@ package nz.co.codec.flexorm.metamodel
         public function get fkProperty():String
         {
             return _fkProperty;
+        }
+
+        public function set root(value:String):void
+        {
+            if (_name)
+                throw new Error("root has been set after table");
+
+            _root = value;
+        }
+
+        public function get root():String
+        {
+            return _root;
+        }
+
+        private function setName(name:String):void
+        {
+            if (name == null)
+                return;
+
+            if (_namingStrategy == NamingStrategy.CAMEL_CASE_NAMES)
+            {
+                _tableSingular = Inflector.singularize(StringUtils.camelCase(name));
+                _table = _tableSingular;
+                _fkColumn = StringUtils.startLowerCase(_tableSingular) + "Id";
+                _fkProperty = _fkColumn;
+            }
+            else
+            {
+                _tableSingular = Inflector.singularize(StringUtils.underscore(name)).toLowerCase();
+                _table = Inflector.pluralize(StringUtils.underscore(name)).toLowerCase();
+                _fkColumn = _tableSingular + "_id";
+                if (_root)
+                {
+                    _fkProperty = StringUtils.startLowerCase(Inflector.singularize(StringUtils.camelCase(name))) + "Id";
+                }
+                else
+                {
+                    _fkProperty = StringUtils.startLowerCase(_className) + "Id";
+                }
+            }
+        }
+
+        private function setNameDefault():void
+        {
+            if (_namingStrategy == NamingStrategy.CAMEL_CASE_NAMES)
+            {
+                _tableSingular = _className;
+                _table = _tableSingular;
+                _fkColumn = StringUtils.startLowerCase(_tableSingular) + "Id";
+                _fkProperty = _fkColumn;
+            }
+            else
+            {
+                _tableSingular = StringUtils.underscore(_className).toLowerCase();
+                _table = Inflector.pluralize(_tableSingular);
+                _fkColumn = _tableSingular + "_id";
+                _fkProperty = StringUtils.startLowerCase(_className) + "Id";
+            }
+        }
+
+        public function get name():String
+        {
+            return _name;
         }
 
         public function addIdentity(value:IIdentity):void

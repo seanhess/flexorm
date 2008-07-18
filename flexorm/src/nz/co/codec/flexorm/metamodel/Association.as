@@ -20,9 +20,20 @@ package nz.co.codec.flexorm.metamodel
     public class Association
     {
         /**
-         * property name
+         * Property name
          */
         public var property:String;
+
+        /**
+         * Database column name of the FK to the owner Entity. Used if set
+         * to override the 'className_id' naming convention.
+         */
+        public var fkColumn:String;
+
+        /**
+         * The parameter name corresponding to the fkColumn name.
+         */
+        public var fkProperty:String;
 
         /**
          * true if this association is the inverse end

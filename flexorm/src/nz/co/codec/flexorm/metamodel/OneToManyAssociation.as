@@ -12,10 +12,6 @@ package nz.co.codec.flexorm.metamodel
          */
         public var selectCommand:SelectCommand;
 
-        public var fkColumn:String;
-
-        public var fkProperty:String;
-
         public function OneToManyAssociation(hash:Object=null)
         {
             super(hash);
