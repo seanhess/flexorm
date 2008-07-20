@@ -223,11 +223,11 @@ package nz.co.codec.flexorm
             var keyMap:Object = new Object();
             for each(var key:Key in entity.keys)
             {
-                var id:int = row[key.fkColumn];
+                var id:int = row[key.column];
                 if (id == 0)
                     return null;
 
-                keyMap[key.property] = id;
+                keyMap[key.fkProperty] = id;
             }
             return keyMap;
         }
@@ -314,6 +314,11 @@ package nz.co.codec.flexorm
                 cacheMap[name] = cache;
             }
             return cache;
+        }
+
+        protected function clearCache():void
+        {
+            cacheMap = new Object();
         }
 
     }

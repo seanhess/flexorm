@@ -67,12 +67,6 @@ package nz.co.codec.flexorm
             q.push({ executable: value, label: label });
         }
 
-        public function addFunction(value:Function, label:String=null):void
-        {
-            childCount++;
-            q.push({ executable: value, label: label });
-        }
-
         public function setResponder(value:IResponder):void
         {
             _responder = value;

@@ -7,6 +7,12 @@ package nz.co.codec.flexorm
             super(label? "BlockingExecutor::" + label : null, debugLevel, level);
         }
 
+        public function addFunction(value:Function, label:String=null):void
+        {
+            childCount++;
+            q.push({ executable: value, label: label });
+        }
+
         override public function execute():void
         {
             if (q.length == 0)

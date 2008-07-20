@@ -178,7 +178,9 @@ package nz.co.codec.flexorm
             var entity:Entity = getEntity(c);
             var command:FindAllCommand = entity.findAllCommand;
             command.execute();
-            return typeArray(command.result, entity);
+            var result:ArrayCollection = typeArray(command.result, entity);
+            clearCache();
+            return result;
         }
 
         private function loadItems(selectCommand:SelectCommand, keyMap:Object, entity:Entity):ArrayCollection
@@ -194,7 +196,9 @@ package nz.co.codec.flexorm
          */
         public function loadOneToManyAssociation(a:OneToManyAssociation, keyMap:Object):ArrayCollection
         {
-            return loadItems(a.selectCommand, keyMap, a.associatedEntity);
+            var result:ArrayCollection = loadItems(a.selectCommand, keyMap, a.associatedEntity);
+            clearCache();
+            return result;
         }
 
         /**
@@ -206,7 +210,9 @@ package nz.co.codec.flexorm
             var selectCommand:SelectManyToManyCommand = a.selectCommand;
             setKeyMapParams(selectCommand, keyMap);
             selectCommand.execute();
-            return typeArray(selectCommand.result, a.associatedEntity);
+            var result:ArrayCollection = typeArray(selectCommand.result, a.associatedEntity);
+            clearCache();
+            return result;
         }
 
         /**
@@ -225,7 +231,9 @@ package nz.co.codec.flexorm
             var selectCommand:SelectCommand = entity.selectCommand;
             selectCommand.setParam(entity.pk.property, id);
             selectCommand.execute();
-            return selectCommand.result? typeObject(selectCommand.result[0], entity) : null;
+            var result:Object = selectCommand.result? typeObject(selectCommand.result[0], entity) : null;
+            clearCache();
+            return result;
         }
 
         public function load(cls:Class, id:int):Object
@@ -242,7 +250,9 @@ package nz.co.codec.flexorm
             var selectCommand:SelectCommand = entity.selectCommand;
             selectCommand.setParam(entity.pk.property, id);
             selectCommand.execute();
-            return selectCommand.result? typeObject(selectCommand.result[0], entity) : null;
+            var result:Object = selectCommand.result? typeObject(selectCommand.result[0], entity) : null;
+            clearCache();
+            return result;
         }
 
         /**
@@ -309,7 +319,9 @@ package nz.co.codec.flexorm
 
             selectCommand.execute();
             var result:Array = selectCommand.result;
-            return result? typeObject(result[0], entity) : null;
+            var retval:Object = result? typeObject(result[0], entity) : null;
+            clearCache();
+            return retval;
         }
 
         /**
@@ -447,6 +459,16 @@ package nz.co.codec.flexorm
                     updateCommand.setParam(idx.property, idx.value);
                 }
             }
+            if (idx == null)
+            {
+                for each(var a:OneToManyAssociation in entity.oneToManyInverseAssociations)
+                {
+                    if (a.indexed)
+                    {
+                        updateCommand.setParam(a.indexProperty, 0);
+                    }
+                }
+            }
             updateCommand.execute();
 
             // The mtmInsertCommand must be executed after the associated entity
@@ -490,6 +512,16 @@ package nz.co.codec.flexorm
                 if (idx)
                 {
                     insertCommand.setParam(idx.property, idx.value);
+                }
+            }
+            if (idx == null)
+            {
+                for each(var a:OneToManyAssociation in entity.oneToManyInverseAssociations)
+                {
+                    if (a.indexed)
+                    {
+                        insertCommand.setParam(a.indexProperty, 0);
+                    }
                 }
             }
             insertCommand.execute();
@@ -589,7 +621,7 @@ package nz.co.codec.flexorm
             for each(var a:OneToManyAssociation in entity.oneToManyAssociations)
             {
                 var value:IList = obj[a.property];
-                if (value && !a.inverse && (!a.lazy || LazyList(value).loaded) && isCascadeSave(a))
+                if (value && !a.inverse && (!a.lazy || !(value is LazyList) || LazyList(value).loaded) && isCascadeSave(a))
                 {
                     if (!entity.hasCompositeKey())
                     {
@@ -853,7 +885,6 @@ package nz.co.codec.flexorm
             {
                 instance[f.property] = row[f.column];
             }
-
             if (!entity.hasCompositeKey())
             {
                 var id:int = row[entity.pk.column];
@@ -862,7 +893,8 @@ package nz.co.codec.flexorm
 
             loadManyToOneAssociations(instance, row, entity);
 
-            // must be after IDs on instance is set
+            // must be after IDs on instance is set and
+            // after loadManyToOneAssociations to load composite keys
             setCachedValue(instance, entity);
 
             loadOneToManyAssociations(instance, row, entity);
@@ -907,15 +939,19 @@ package nz.co.codec.flexorm
                 else
                 {
                     var associatedEntity:Entity = a.associatedEntity;
-                    var keyMap:Object;
+                    var keyMap:Object = null;
                     if (associatedEntity.hasCompositeKey())
                     {
-                        keyMap = getKeyMap(row, associatedEntity);
+                        keyMap = getFkMap(row, associatedEntity);
                     }
                     else
                     {
-                        keyMap = new Object();
-                        keyMap[associatedEntity.pk.property] = row[a.fkColumn];
+                        var id:int = row[a.fkColumn];
+                        if (id > 0)
+                        {
+                            keyMap = new Object();
+                            keyMap[associatedEntity.pk.property] = id;
+                        }
                     }
                     if (keyMap)
                     {
@@ -936,7 +972,23 @@ package nz.co.codec.flexorm
             {
                 if (a.lazy)
                 {
-                    instance[a.property] = new LazyList(this, a, getKeyMap(row, entity));
+                    var keyMap:Object = new Object();
+                    if (entity.hasCompositeKey())
+                    {
+                        for each(var key:Key in entity.keys)
+                        {
+                            keyMap[key.fkProperty] = row[key.column];
+                        }
+                    }
+                    else
+                    {
+                        keyMap[a.fkProperty] = row[entity.pk.column];
+                    }
+                    var lazyList:LazyList = new LazyList(this, a, keyMap);
+                    var value:ArrayCollection = new ArrayCollection();
+                    value.list = lazyList;
+                    instance[a.property] = value;
+                    lazyList.initialise();
                 }
                 else
                 {
@@ -951,7 +1003,11 @@ package nz.co.codec.flexorm
             {
                 if (a.lazy)
                 {
-                    instance[a.property] = new LazyList(this, a, getKeyMap(row, entity));
+                    var lazyList:LazyList = new LazyList(this, a, getKeyMap(row, entity));
+                    var value:ArrayCollection = new ArrayCollection();
+                    value.list = lazyList;
+                    instance[a.property] = value;
+                    lazyList.initialise();
                 }
                 else
                 {

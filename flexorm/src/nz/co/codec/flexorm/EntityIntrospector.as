@@ -342,6 +342,7 @@ package nz.co.codec.flexorm
                         associatedEntity = new Entity();
                         associatedEntity.cls = type;
                         associatedEntity.namingStrategy = _namingStrategy;
+                        associatedEntity.table = null;  // TODO hidden behaviour
                         _map[typeCN] = associatedEntity;
                         _deferred.push({ type: type, table: null });
                     }
@@ -378,6 +379,9 @@ package nz.co.codec.flexorm
                 {
                     metadata = v.metadata.(@name == Tags.ELEM_ONE_TO_MANY);
                     type = getClass(metadata.arg.(@key == Tags.ATTR_TYPE).@value);
+                    if (type == null)
+                        throw new Error("Attribute 'type' not set on [OneToMany] annotation.");
+
                     typeCN = getClassName(type);
                     cascadeType = metadata.arg.(@key == Tags.ATTR_CASCADE).@value;
                     lazy = StringUtils.parseBoolean(metadata.arg.(@key == Tags.ATTR_LAZY).@value.toString(), false);

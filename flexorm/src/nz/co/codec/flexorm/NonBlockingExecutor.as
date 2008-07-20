@@ -26,14 +26,6 @@ package nz.co.codec.flexorm
 
                         command.execute();
                     }
-                    else if (step.executable is Function)
-                    {
-                        if (_debugLevel > 0 && step.label)
-                            trace(label + " executing function " + step.label);
-
-                        step.executable(lastResult);
-                        result(lastResult);
-                    }
                 }
             }
         }

@@ -6,8 +6,6 @@ package nz.co.codec.flexorm
     {
         function addCommand(value:ICommand, label:String=null):void;
 
-        function addFunction(value:Function, label:String=null):void;
-
         function get parent():IExecutor;
 
         function set response(value:Object):void;

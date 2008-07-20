@@ -15,22 +15,31 @@ package nz.co.codec.flexorm
 
         private var _keyMap:Object;
 
-        public var loaded:Boolean = false;
+        private var _loaded:Boolean = true;
 
-        public function LazyList(em:EntityManager, a:IListAssociation, keyMap:Object, source:Array=null)
+        public function LazyList(em:EntityManager, a:IListAssociation, keyMap:Object)
         {
-            super(source);
-            if (source)
-                loaded = true;
+            super();
             _em = em;
             _a = a;
             _keyMap = keyMap;
         }
 
+        public function initialise():void
+        {
+            _loaded = false;
+        }
+
+        public function get loaded():Boolean
+        {
+            return _loaded;
+        }
+
         override public function get source():Array
         {
-            if (!loaded)
+            if (!_loaded)
             {
+                _loaded = true;
                 if (_a is OneToManyAssociation)
                 {
                     var otmAssociations:ArrayCollection = _em.loadOneToManyAssociation(OneToManyAssociation(_a), _keyMap);
@@ -48,7 +57,6 @@ package nz.co.codec.flexorm
                     }
                 }
             }
-            loaded = true;
             return super.source;
         }
 
