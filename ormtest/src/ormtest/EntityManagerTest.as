@@ -20,10 +20,12 @@ package ormtest
     import ormtest.model.Lesson;
     import ormtest.model.Order;
     import ormtest.model.Organisation;
+    import ormtest.model.Part;
     import ormtest.model.Resource;
     import ormtest.model.Role;
     import ormtest.model.Schedule;
     import ormtest.model.Student;
+    import ormtest.model.Vehicle;
     import ormtest.model2.Person;
 
     public class EntityManagerTest extends TestCase
@@ -54,6 +56,7 @@ package ormtest
             ts.addTest(new EntityManagerTest("testSaveManyToOneUntypedObject"));
             ts.addTest(new EntityManagerTest("testSaveOneToManyUntypedObject"));
             ts.addTest(new EntityManagerTest("testRecursiveJoin"));
+            ts.addTest(new EntityManagerTest("testLazyLoading"));
             return ts;
         }
 
@@ -537,6 +540,28 @@ package ormtest
             var loadedGallery:Gallery = em.loadItem(Gallery, g3.id) as Gallery;
             assertEquals(loadedGallery.name, "C");
             assertEquals(loadedGallery.parent.parent.name, "A");
+        }
+
+        public function testLazyLoading():void
+        {
+            trace("\nTest Lazy Loading");
+            trace("=================");
+
+            var car:Vehicle = new Vehicle();
+            car.name = "Car";
+
+            var engine:Part = new Part();
+            engine.name = "Engine";
+            car.parts.addItem(engine);
+
+            var wheel:Part = new Part();
+            wheel.name = "Wheel";
+            car.parts.addItem(wheel);
+
+            em.save(car);
+
+            var loadedCar:Vehicle = em.load(Vehicle, car.id) as Vehicle;
+            assertEquals(loadedCar.parts.length, 2);
         }
 
     }

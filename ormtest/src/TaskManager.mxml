@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:WindowedApplication xmlns:mx="http://www.adobe.com/2006/mxml" layout="absolute"
+    width="600"
+    creationComplete="loadData()">
+    <mx:Script>
+        <![CDATA[
+            import mx.collections.HierarchicalData;
+            import mx.collections.ArrayCollection;
+            import nz.co.codec.flexorm.EntityManager;
+            import ormtest.model.Task;
+
+            private var em:EntityManager = EntityManager.instance;
+
+            private var tasksRoot:Task;
+
+            private var removedItems:Array = [];
+
+            private function loadData():void
+            {
+                em.debugLevel = 1;
+                em.openSyncConnection("tree-test.db");
+                var tasks:ArrayCollection = em.findAll(Task);
+                for each(var task:Task in tasks)
+                {
+                    if (task.parent == null)
+                    {
+                        tasksRoot = task;
+                        break;
+                    }
+                }
+                if (tasksRoot == null)
+                {
+                    tasksRoot = new Task();
+                }
+                tasksGrid.dataProvider = new HierarchicalData(tasksRoot);
+            }
+/*
+            private function fetchChildren():void
+            {
+                var task:Task = tasksGrid.selectedItem as Task;
+                if (task)
+                {
+                    task.children.length;
+                    tasksGrid.invalidateList();
+                }
+            }
+*/
+            private function addTask():void
+            {
+                var parent:Task = tasksGrid.selectedItem as Task;
+                parent.addChild(new Task());
+                tasksGrid.invalidateList();
+            }
+
+            private function removeTask():void
+            {
+                var task:Task = tasksGrid.selectedItem as Task;
+                task.parent.removeChild(task);
+                removedItems.push(task);
+            }
+
+            private function removable(task:Task):Boolean
+            {
+                return (task && task.parent)? true : false;
+            }
+
+            private function moveTask(i:int):void
+            {
+                var task:Task = tasksGrid.selectedItem as Task;
+                var idx:int = task.parent.children.getItemIndex(task);
+                task.parent.children.removeItemAt(idx);
+                task.parent.children.addItemAt(task, idx + i);
+            }
+
+            private function movableUp(task:Task):Boolean
+            {
+                return (task && task.parent && (task.parent.children.getItemIndex(task) > 0))? true : false;
+            }
+
+            private function movableDown(task:Task):Boolean
+            {
+                return (task && task.parent && (task.parent.children.getItemIndex(task) < task.parent.children.length - 1))? true : false;
+            }
+
+            private function saveTree():void
+            {
+                em.save(tasksRoot);
+                for each(var task:Task in removedItems)
+                {
+                    em.remove(task);
+                }
+                removedItems.length = 0;
+            }
+        ]]>
+    </mx:Script>
+
+    <mx:VBox width="100%" height="100%" horizontalAlign="center">
+        <mx:AdvancedDataGrid id="tasksGrid"
+            width="100%" height="100%"
+            editable="true">
+            <mx:columns>
+                <mx:AdvancedDataGridColumn dataField="name" headerText="Name"/>
+                <mx:AdvancedDataGridColumn dataField="amount" headerText="Amount"/>
+            </mx:columns>
+        </mx:AdvancedDataGrid>
+
+        <mx:HBox>
+            <mx:Button label="Add Task" click="addTask()" enabled="{tasksGrid.selectedIndex > -1}"/>
+            <mx:Button label="Remove Task" click="removeTask()" enabled="{removable(tasksGrid.selectedItem as Task)}"/>
+            <mx:Button label="Move Up" click="moveTask(-1)" enabled="{movableUp(tasksGrid.selectedItem as Task)}"/>
+            <mx:Button label="Move Down" click="moveTask(1)" enabled="{movableDown(tasksGrid.selectedItem as Task)}"/>
+            <mx:Button label="Save" click="saveTree()"/>
+            <mx:Button label="Reset" click="loadData()"/>
+        </mx:HBox>
+
+        <mx:Spacer height="10"/>
+
+    </mx:VBox>
+
+</mx:WindowedApplication>

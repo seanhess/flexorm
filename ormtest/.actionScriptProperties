@@ -12,8 +12,9 @@
 </compiler>
 <applications>
 <application path="Main.mxml"/>
-<application path="TestRunner.mxml"/>
 <application path="AsyncTestRunner.mxml"/>
+<application path="TestRunner.mxml"/>
+<application path="TaskManager.mxml"/>
 </applications>
 <modules/>
 <buildCSSFiles/>
