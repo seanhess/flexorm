@@ -3,11 +3,10 @@ package nz.co.codec.flexorm.util
     import mx.collections.ArrayCollection;
 
     import nz.co.codec.flexorm.EntityManager;
-    import nz.co.codec.flexorm.IEntityManager;
 
     public dynamic class PersistentEntity
     {
-        private static var em:IEntityManager = EntityManager.instance;
+        private static var em:EntityManager = EntityManager.instance;
 
         /**
          * 'this' refers to the object of the class that this method

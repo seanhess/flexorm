@@ -12,18 +12,23 @@ package nz.co.codec.flexorm.command
     import nz.co.codec.flexorm.BlockingExecutor;
     import nz.co.codec.flexorm.EntityEvent;
 
-    public class CreateCommandAsync extends SQLCommand
+    public class CreateAsynCommand extends SQLCommand
     {
+        private var _created:Boolean;
+
         private var _pk:String;
 
-        private var _created:Boolean = false;
-
-        public function CreateCommandAsync(table:String, sqlConnection:SQLConnection, debugLevel:int=0)
+        public function CreateAsynCommand(
+            sqlConnection:SQLConnection,
+            schema:String,
+            table:String,
+            debugLevel:int=0)
         {
-            super(table, sqlConnection, debugLevel);
+            super(sqlConnection, schema, table, debugLevel);
+            _created = false;
         }
 
-        public function setPk(column:String):void
+        public function setPrimaryKey(column:String):void
         {
             _pk = column + " integer primary key autoincrement";
             _changed = true;
@@ -31,23 +36,23 @@ package nz.co.codec.flexorm.command
 
         override public function addColumn(column:String, type:String):void
         {
-            if (_columns == null)
-                _columns = new Object();
-
-            _columns[column] = { type: type, constraint: null };
+            _columns[column] = { type: type };
             _changed = true;
         }
 
-        public function addFkColumn(
+        public function addForeignKey(
             column:String,
             type:String,
-            fkConstraintTable:String,
-            fkConstraintColumn:String):void
+            constraintTable:String,
+            constraintColumn:String):void
         {
-            if (_columns == null)
-                _columns = new Object();
-
-            _columns[column] = { type: type, constraint: { table: fkConstraintTable, column: fkConstraintColumn } };
+            _columns[column] = {
+                type: type,
+                constraint: {
+                    table: constraintTable,
+                    column: constraintColumn
+                }
+            };
             _changed = true;
         }
 
@@ -125,18 +130,18 @@ package nz.co.codec.flexorm.command
             if (!_created)
             {
                 var q:BlockingExecutor = new BlockingExecutor();
-                q.response = event.type;
-                q.setResponder(_responder);
+                q.responder = _responder;
+                q.data = event.type;
 
-                // create foreign key constraint triggers
+                // Create foreign key constraint triggers
                 for (var column:String in _columns)
                 {
                     var constraint:Object = _columns[column].constraint;
                     if (constraint)
                     {
-                        q.addCommand(new FkConstraintInsertTriggerCommand(_table, column, constraint.table, constraint.column, _sqlConnection, _debugLevel));
-                        q.addCommand(new FkConstraintUpdateTriggerCommand(_table, column, constraint.table, constraint.column, _sqlConnection, _debugLevel));
-                        q.addCommand(new FkConstraintDeleteTriggerCommand(_table, column, constraint.table, constraint.column, _sqlConnection, _debugLevel));
+                        q.add(new ConstraintInsertTriggerCommand(_sqlConnection, _schema, _table, column, constraint.table, constraint.column, _debugLevel));
+                        q.add(new ConstraintUpdateTriggerCommand(_sqlConnection, _schema, _table, column, constraint.table, constraint.column, _debugLevel));
+                        q.add(new ConstraintDeleteTriggerCommand(_sqlConnection, _schema, _table, column, constraint.table, constraint.column, _debugLevel));
                     }
                 }
                 q.execute();
@@ -172,28 +177,26 @@ package nz.co.codec.flexorm.command
                         " add " + column + " " + _columns[column].type + ";";
                 }
             }
-            return (sql == "")? null : sql;
+            return (sql.length > 0)? sql : null;
         }
 
         private function buildCreateSQL():String
         {
-            var sql:String = "create table if not exists " + _table + " (";
+            var sql:String = "create table if not exists " + _schema + "." + _table + "(";
             if (_pk)
-            {
                 sql += _pk + ",";
-            }
+
             for (var column:String in _columns)
             {
                 sql += column + " " + _columns[column].type + ",";
             }
-            // remove last comma
-            sql = sql.substring(0, sql.length - 1) + ")";
+            sql = sql.substring(0, sql.length - 1) + ")"; // remove last comma
             return sql;
         }
 
         public function toString():String
         {
-            return "CREATE " + _table + ": " + _statement.text;
+            return "CREATE ASYN " + _table + ": " + _statement.text;
         }
 
     }

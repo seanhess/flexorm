@@ -5,37 +5,40 @@ package nz.co.codec.flexorm.command
 
     import mx.utils.ObjectUtil;
 
-    public class SelectManyToManyCommand extends SQLParameterisedCommand
+    public class SelectSubTypeCommand extends SQLParameterisedCommand
     {
-        private var _associationTable:String;
-
-        private var _indexColumn:String;
+        private var _parentTable:String;
 
         private var _joins:Object;
 
+        private var _indexColumn:String;
+
         private var _result:Array;
 
-        public function SelectManyToManyCommand(
+        public function SelectSubTypeCommand(
             sqlConnection:SQLConnection,
             schema:String,
             table:String,
-            associationTable:String,
-            indexColumn:String=null,
             debugLevel:int=0)
         {
             super(sqlConnection, schema, table, debugLevel);
-            _associationTable = associationTable;
-            _indexColumn = indexColumn;
             _joins = {};
         }
 
-        public function clone():SelectManyToManyCommand
+        public function clone():SelectSubTypeCommand
         {
-            var copy:SelectManyToManyCommand = new SelectManyToManyCommand(_sqlConnection, _schema, _table, _associationTable, _indexColumn, _debugLevel);
+            var copy:SelectSubTypeCommand = new SelectSubTypeCommand(_sqlConnection, _schema, _table, _debugLevel);
             copy.columns = ObjectUtil.copy(_columns);
             copy.filters = ObjectUtil.copy(_filters);
+            copy.parentTable = _parentTable;
             copy.joins = ObjectUtil.copy(_joins);
+            copy.indexColumn = _indexColumn;
             return copy;
+        }
+
+        public function set parentTable(value:String):void
+        {
+            _parentTable = value;
         }
 
         protected function set joins(value:Object):void
@@ -49,23 +52,28 @@ package nz.co.codec.flexorm.command
             _changed = true;
         }
 
+        public function set indexColumn(value:String):void
+        {
+            _indexColumn = value;
+        }
+
         override protected function prepareStatement():void
         {
             if (_joins == null)
-                throw new Error("Join columns on SelectManyToManyCommand not set. ");
+                throw new Error("Join columns on SelectSubTypeCommand not set. ");
 
             var sql:String = "select ";
             for (var column:String in _columns)
             {
-                sql += "a." + column + ",";
+                sql += "t." + column + ",";
             }
             sql = sql.substring(0, sql.length - 1); // remove last comma
-            sql += " from " + _schema + "." + _table +
-                " a inner join " + _schema + "." + _associationTable + " b on ";
+            sql+= " from " + _schema + "." + _table + " t inner join " +
+                _parentTable + " p on ";
 
             for (var fk:String in _joins)
             {
-                sql += "b." + fk + "=a." + _joins[fk] + " and ";
+                sql += "p." + fk + "=t." + _joins[fk] + " and ";
             }
             sql = sql.substring(0, sql.length - 5); // remove last ' and '
 
@@ -74,12 +82,12 @@ package nz.co.codec.flexorm.command
                 sql += " where ";
                 for (var filter:String in _filters)
                 {
-                    sql += "b." + filter + "=" + _filters[filter] + " and ";
+                    sql += "p." + filter + "=" + _filters[filter] + " and ";
                 }
                 sql = sql.substring(0, sql.length - 5); // remove last ' and '
             }
             if (_indexColumn)
-                sql += " order by b." + _indexColumn;
+                sql += " order by " + _indexColumn;
 
             _statement.text = sql;
             _changed = false;
@@ -105,7 +113,7 @@ package nz.co.codec.flexorm.command
 
         public function toString():String
         {
-            return "SELECT MANY-TO-MANY " + _table + ": " + _statement.text;
+            return "SELECT SUBTYPE " + _table + ": " + _statement.text;
         }
 
     }

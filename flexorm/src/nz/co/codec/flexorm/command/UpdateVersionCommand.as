@@ -4,14 +4,18 @@ package nz.co.codec.flexorm.command
 
     public class UpdateVersionCommand extends SQLParameterisedCommand
     {
-        public function UpdateVersionCommand(table:String, sqlConnection:SQLConnection, debugLevel:int=0)
+        public function UpdateVersionCommand(
+            sqlConnection:SQLConnection,
+            schema:String,
+            table:String,
+            debugLevel:int=0)
         {
-            super(table, sqlConnection, debugLevel);
+            super(sqlConnection, schema, table, debugLevel);
         }
 
         override protected function prepareStatement():void
         {
-            var sql:String = "update " + _table + " set version=:version";
+            var sql:String = "update " + _schema + "." + _table + " set version=:version";
             if (_filters)
             {
                 sql += " where ";
@@ -19,8 +23,7 @@ package nz.co.codec.flexorm.command
                 {
                     sql += filter + "=" + _filters[filter] + " and ";
                 }
-                // remove last ' and '
-                sql = sql.substring(0, sql.length - 5);
+                sql = sql.substring(0, sql.length - 5); // remove last ' and '
             }
             _statement.text = sql;
             _changed = false;

@@ -4,15 +4,19 @@ package nz.co.codec.flexorm.command
 
     public class SQLParameterisedCommand extends SQLCommand
     {
-        public function SQLParameterisedCommand(table:String, sqlConnection:SQLConnection, debugLevel:int=0)
+        public function SQLParameterisedCommand(
+            sqlConnection:SQLConnection,
+            schema:String,
+            table:String,
+            debugLevel:int=0)
         {
-            super(table, sqlConnection, debugLevel);
+            super(sqlConnection, schema, table, debugLevel);
         }
 
         public function setParam(param:String, value:Object):void
         {
             if (param == null)
-                throw new Error("Null param set on SQLCommand");
+                throw new Error("Null param set on SQLParameterisedCommand. ");
 
             _statement.parameters[":" + param] = value;
         }

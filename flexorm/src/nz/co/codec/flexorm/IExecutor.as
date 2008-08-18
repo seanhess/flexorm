@@ -4,21 +4,25 @@ package nz.co.codec.flexorm
 
     public interface IExecutor extends ICommand, IResponder
     {
-        function addCommand(value:ICommand, label:String=null):void;
+        function add(command:ICommand, resultHandler:Function=null):void;
 
         function get parent():IExecutor;
 
-        function set response(value:Object):void;
+        function setProperty(name:String, value:*):void;
 
-        function get response():Object;
+        function getProperty(name:String):*;
+
+        function set data(value:Object):void;
+
+        function get data():Object;
 
         function set id(value:int):void;
 
         function get id():int;
 
-        function branchBlocking(label:String=null):BlockingExecutor;
+        function branchBlocking():BlockingExecutor;
 
-        function branchNonBlocking(label:String=null):NonBlockingExecutor;
+        function branchNonBlocking():NonBlockingExecutor;
 
     }
 }

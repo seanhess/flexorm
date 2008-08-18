@@ -6,19 +6,19 @@ package nz.co.codec.flexorm
 
     public interface IEntityManagerAsync
     {
-        function findAll(c:Class, responder:IResponder):void;
+        function findAll(cls:Class, responder:IResponder):void;
 
-        function load(c:Class, id:int, responder:IResponder):void;
+        function load(cls:Class, id:int, responder:IResponder):void;
 
-        function loadItem(c:Class, id:int, responder:IResponder):void;
+        function loadItem(cls:Class, id:int, responder:IResponder):void;
 
-        function loadItemByCompositeKey(cls:Class, compositeKeys:Array, responder:IResponder):void;
+        function loadItemByCompositeKey(cls:Class, keys:Array, responder:IResponder):void;
 
-        function save(o:Object, responder:IResponder):void;
+        function save(obj:Object, responder:IResponder, opt:Object=null):void;
 
-        function remove(o:Object, responder:IResponder):void;
+        function remove(obj:Object, responder:IResponder):void;
 
-        function removeItem(c:Class, id:int, responder:IResponder):void;
+        function removeItem(cls:Class, id:int, responder:IResponder):void;
 
         function markForDeletion(obj:Object, responder:IResponder):void;
 
@@ -26,7 +26,7 @@ package nz.co.codec.flexorm
 
         function endTransaction(responder:IResponder):void;
 
-        function makePersistent(c:Class):void;
+        function makePersistent(cls:Class):void;
 
         function openAsyncConnection(dbFilename:String, responder:IResponder):void
 

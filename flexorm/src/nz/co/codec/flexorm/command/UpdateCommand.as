@@ -2,25 +2,30 @@ package nz.co.codec.flexorm.command
 {
     import flash.data.SQLConnection;
 
+    import mx.utils.ObjectUtil;
+
     public class UpdateCommand extends SQLParameterisedCommand
     {
-        public function UpdateCommand(table:String, sqlConnection:SQLConnection, debugLevel:int=0)
+        public function UpdateCommand(
+            sqlConnection:SQLConnection,
+            schema:String,
+            table:String,
+            debugLevel:int=0)
         {
-            super(table, sqlConnection, debugLevel);
+            super(sqlConnection, schema, table, debugLevel);
         }
 
         public function clone():UpdateCommand
         {
-            var copy:UpdateCommand = new UpdateCommand(_table, _sqlConnection);
-            copy.columns = _columns;
-            copy.filters = _filters;
-            copy.debugLevel = _debugLevel;
+            var copy:UpdateCommand = new UpdateCommand(_sqlConnection, _schema, _table, _debugLevel);
+            copy.columns = ObjectUtil.copy(_columns);
+            copy.filters = ObjectUtil.copy(_filters);
             return copy;
         }
 
         override protected function prepareStatement():void
         {
-            var sql:String = "update " + _table + " set ";
+            var sql:String = "update " + _schema + "." + _table + " set ";
             for (var column:String in _columns)
             {
                 sql += column + "=" + _columns[column] + ",";
@@ -33,8 +38,7 @@ package nz.co.codec.flexorm.command
                 {
                     sql += filter + "=" + _filters[filter] + " and ";
                 }
-                // remove last ' and '
-                sql = sql.substring(0, sql.length - 5);
+                sql = sql.substring(0, sql.length - 5); // remove last ' and '
             }
             _statement.text = sql;
             _changed = false;

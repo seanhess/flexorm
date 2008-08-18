@@ -2,40 +2,42 @@ package nz.co.codec.flexorm.command
 {
     import flash.data.SQLConnection;
 
-    public class SelectFkMapCommand extends SQLCommand
+    public class SelectKeysCommand extends SQLCommand
     {
-        private var _idColumns:Array = [];
+        private var _keys:Array;
 
         private var _result:Array;
 
-        public function SelectFkMapCommand(table:String, sqlConnection:SQLConnection, debugLevel:int=0)
+        public function SelectKeysCommand(
+            sqlConnection:SQLConnection,
+            schema:String,
+            table:String,
+            debugLevel:int=0)
         {
-            super(table, sqlConnection, debugLevel);
+            super(sqlConnection, schema, table, debugLevel);
+            _keys = [];
         }
 
-        public function addIdColumn(value:String):void
+        public function addKey(value:String):void
         {
-            _idColumns.push(value);
+            _keys.push(value);
         }
 
         override protected function prepareStatement():void
         {
             var sql:String = "select ";
-            for each(var column:String in _idColumns)
+            for each(var key:String in _keys)
             {
-                sql += "t." + column + ",";
+                sql += "t." + key + ",";
             }
-            sql += "t.version";
-            sql += " from " + _table + " t";
+            sql += "t.version from " + _schema + "." + _table + " t";
         }
 
         override public function execute():void
         {
             super.execute();
             if (_responder == null)
-            {
                 _result = _statement.getResult().data;
-            }
         }
 
         public function get result():Array
@@ -45,7 +47,7 @@ package nz.co.codec.flexorm.command
 
         public function toString():String
         {
-            return "SELECT FK Map from " + _table + ": " + _statement.text;
+            return "SELECT KEYS " + _table + ": " + _statement.text;
         }
 
     }

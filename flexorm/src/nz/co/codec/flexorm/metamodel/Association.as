@@ -1,7 +1,5 @@
 package nz.co.codec.flexorm.metamodel
 {
-    import mx.utils.StringUtil;
-
     import nz.co.codec.flexorm.CascadeType;
 
     /**
@@ -84,14 +82,8 @@ package nz.co.codec.flexorm.metamodel
          */
         public function set cascadeType(value:String):void
         {
-            if (value == null)
-                return;
-
-            var val:String = StringUtil.trim(value);
-            if (val.length > 0)
-            {
-                _cascadeType = val;
-            }
+            if (value && value.length > 0)
+                _cascadeType = value;
         }
 
         public function get cascadeType():String

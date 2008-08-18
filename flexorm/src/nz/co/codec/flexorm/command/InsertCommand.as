@@ -3,35 +3,39 @@ package nz.co.codec.flexorm.command
     import flash.data.SQLConnection;
     import flash.events.SQLEvent;
 
+    import mx.utils.ObjectUtil;
+
     public class InsertCommand extends SQLParameterisedCommand
     {
         private var _lastInsertRowID:int;
 
-        public function InsertCommand(table:String, sqlConnection:SQLConnection, debugLevel:int=0)
+        public function InsertCommand(
+            sqlConnection:SQLConnection,
+            schema:String,
+            table:String,
+            debugLevel:int=0)
         {
-            super(table, sqlConnection, debugLevel);
+            super(sqlConnection, schema, table, debugLevel);
         }
 
         public function clone():InsertCommand
         {
-            var copy:InsertCommand = new InsertCommand(_table, _sqlConnection);
-            copy.columns = _columns;
-            copy.filters = _filters;
-            copy.debugLevel = _debugLevel;
+            var copy:InsertCommand = new InsertCommand(_sqlConnection, _schema, _table, _debugLevel);
+            copy.columns = ObjectUtil.copy(_columns);
+            copy.filters = ObjectUtil.copy(_filters);
             return copy;
         }
 
         override protected function prepareStatement():void
         {
-            var sql:String = "insert into " + _table + "(";
+            var sql:String = "insert into " + _schema + "." + _table + "(";
             var values:String = ") values (";
             for (var column:String in _columns)
             {
                 sql += column + ",";
                 values += _columns[column] + ",";
             }
-            sql = sql.substring(0, sql.length - 1) +
-                values.substring(0, values.length - 1) + ")";
+            sql = sql.substring(0, sql.length-1) + values.substring(0, values.length-1) + ")";
             _statement.text = sql;
             _changed = false;
         }

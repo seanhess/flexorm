@@ -11,47 +11,57 @@ package nz.co.codec.flexorm
     import nz.co.codec.flexorm.metamodel.Association;
     import nz.co.codec.flexorm.metamodel.Entity;
     import nz.co.codec.flexorm.metamodel.Field;
-    import nz.co.codec.flexorm.metamodel.Key;
+    import nz.co.codec.flexorm.metamodel.Identity;
     import nz.co.codec.flexorm.util.Mixin;
     import nz.co.codec.flexorm.util.PersistentEntity;
 
     public class EntityManagerBase
     {
-        // a hash of entity metadata using the entity class name as key
-        protected var map:Object = new Object();
+        internal static const OBJECT_TYPE:String = "Object";
 
-        protected var _sqlConnection:SQLConnection;
+        internal static const DEFAULT_SCHEMA:String = "main";
+
+        private var _schema:String;
+
+        private var _sqlConnection:SQLConnection;
 
         private var _introspector:EntityIntrospector;
 
-        private var _debugLevel:int = 0;
+        private var _debugLevel:int;
 
-        // identity map
-        private var cacheMap:Object = new Object();
+        private var _opt:Object;
 
-        private var _legacySupport:Boolean = false;
+        // A map of Entities using the Entity name as key
+        private var _entityMap:Object;
 
-        private var _syncSupport:Boolean = false;
+        // Identity Map
+        public var cacheMap:Object;
 
-        public function EntityManagerBase() { }
-
-        /**
-         * To support databases created by FlexORM before I changed the
-         * column naming convention to use underscores instead of camelCase.
-         */
-        public function set legacySupport(value:Boolean):void
+        public function EntityManagerBase()
         {
-            _legacySupport = value;
+            _schema = DEFAULT_SCHEMA;
+            _opt = {};
+            _opt.namingStrategy = NamingStrategy.UNDERSCORE_NAMES;
+            _opt.syncSupport = false;
+            _debugLevel = 0;
+            _entityMap = {};
+            cacheMap = {};
         }
 
-        public function set syncSupport(value:Boolean):void
+        public function get schema():String
         {
-            _syncSupport = value;
+            return _schema;
         }
 
-        public function get syncSupport():Boolean
+        public function set sqlConnection(value:SQLConnection):void
         {
-            return _syncSupport;
+            _sqlConnection = value;
+            _introspector = new EntityIntrospector(_schema, value, entityMap, debugLevel, opt);
+        }
+
+        public function get sqlConnection():SQLConnection
+        {
+            return _sqlConnection;
         }
 
         public function set introspector(value:EntityIntrospector):void
@@ -61,43 +71,14 @@ package nz.co.codec.flexorm
 
         public function get introspector():EntityIntrospector
         {
-            if (_introspector == null)
-            {
-                _introspector = new EntityIntrospector(map, _sqlConnection,
-                    (_legacySupport)?
-                        NamingStrategy.CAMEL_CASE_NAMES :
-                        NamingStrategy.UNDERSCORE_NAMES,
-                    _syncSupport);
-                _introspector.debugLevel = _debugLevel;
-            }
             return _introspector;
-        }
-
-        public function get metadata():Object
-        {
-            return map;
-        }
-
-        public function set sqlConnection(value:SQLConnection):void
-        {
-            _sqlConnection = value;
-        }
-
-        public function get sqlConnection():SQLConnection
-        {
-            return _sqlConnection;
-        }
-
-        public function makePersistent(cls:Class):void
-        {
-            Mixin.extendClass(cls, PersistentEntity);
-            cls.myClass = cls;
         }
 
         public function set debugLevel(value:int):void
         {
             _debugLevel = value;
-            _introspector = null;
+            if (_introspector)
+                _introspector.debugLevel = value;
         }
 
         public function get debugLevel():int
@@ -105,11 +86,126 @@ package nz.co.codec.flexorm
             return _debugLevel;
         }
 
+        /**
+         * Valid options include:
+         *
+         * - namingStrategy:String
+         *     Valid values:
+         *       NamingStrategy.UNDERSCORE
+         *       NamingStrategy.CAMEL_CASE
+         *         FlexORM versions prior to 0.8 used camelCase.
+         *
+         * - syncSupport:Boolean
+         *
+         */
+        public function set opt(value:Object):void
+        {
+            _opt = value;
+            if (_opt.hasOwnProperty("schema"))
+                _schema = opt.schema;
+        }
+
+        public function get opt():Object
+        {
+            return _opt;
+        }
+
+//        public function set entityMap(value:Object):void
+//        {
+//            _entityMap = value;
+//        }
+
+        public function get entityMap():Object
+        {
+            return _entityMap;
+        }
+
+        public function makePersistent(cls:Class):void
+        {
+            Mixin.extendClass(cls, PersistentEntity);
+
+            // A reference to the original class type since a side effect of
+            // Mixin is to change cls type to PersistentEntity
+            cls.__class = cls;
+        }
+
         protected function getClass(obj:Object):Class
         {
             return (obj is PersistentEntity)?
-                obj.myClass :
+                obj.__class :
                 Class(getDefinitionByName(getQualifiedClassName(obj)));
+        }
+
+        protected function getIdentityMap(key:String, id:int):Object
+        {
+            var map:Object = {};
+            map[key] = id;
+            return map;
+        }
+
+        protected function getIdentityMapFromInstance(obj:Object, entity:Entity):Object
+        {
+            var map:Object = {};
+            for each(var identity:Identity in entity.identities)
+            {
+                map[identity.fkProperty] = identity.getValue(obj);
+            }
+            return map;
+        }
+
+        protected function getIdentityMapFromRow(row:Object, entity:Entity):Object
+        {
+            var map:Object = {};
+            for each(var identity:Identity in entity.identities)
+            {
+                var id:int = row[identity.column];
+                if (id == 0)
+                    return null;
+                map[identity.fkProperty] = id;
+            }
+            return map;
+        }
+
+        protected function getIdentityMapFromAssociation(row:Object, entity:Entity):Object
+        {
+            var map:Object = {};
+            for each(var identity:Identity in entity.identities)
+            {
+                var id:int = row[identity.fkColumn];
+                if (id == 0)
+                    return null;
+                map[identity.fkProperty] = id;
+            }
+            return map;
+        }
+
+        protected function combineMaps(maps:Array):Object
+        {
+            var result:Object = {};
+            for each(var map:Object in maps)
+            {
+                for (var key:String in map)
+                {
+                    result[key] = map[key];
+                }
+            }
+            return result;
+        }
+
+        protected function setIdentMapParams(command:SQLParameterisedCommand, idMap:Object):void
+        {
+            for (var key:String in idMap)
+            {
+                command.setParam(key, idMap[key]);
+            }
+        }
+
+        protected function setIdentityParams(command:SQLParameterisedCommand, obj:Object, entity:Entity):void
+        {
+            for each(var identity:Identity in entity.identities)
+            {
+                command.setParam(identity.fkProperty, identity.getValue(obj));
+            }
         }
 
         protected function setFieldParams(command:SQLParameterisedCommand, obj:Object, entity:Entity):void
@@ -131,7 +227,7 @@ package nz.co.codec.flexorm
                 var value:Object = obj[a.property];
                 if (associatedEntity.hasCompositeKey())
                 {
-                    setFkParams(command, value, associatedEntity);
+                    setIdentityParams(command, value, associatedEntity);
                 }
                 else
                 {
@@ -168,84 +264,6 @@ package nz.co.codec.flexorm
             return (a.cascadeType == CascadeType.DELETE || a.cascadeType == CascadeType.ALL);
         }
 
-        protected function isDynamicObject(obj:Object):Boolean
-        {
-            return (getClassName(getClass(obj)) == "Object");
-        }
-
-        protected function setKeyMapParams(command:SQLParameterisedCommand, keyMap:Object):void
-        {
-            for (var key:String in keyMap)
-            {
-                command.setParam(key, keyMap[key]);
-            }
-        }
-
-        protected function setKeyParams(command:SQLParameterisedCommand, obj:Object, entity:Entity):void
-        {
-            for each(var key:Key in entity.keys)
-            {
-                command.setParam(key.property, key.getIdValue(obj));
-            }
-        }
-
-        protected function setFkParams(command:SQLParameterisedCommand, obj:Object, entity:Entity):void
-        {
-            for each(var key:Key in entity.keys)
-            {
-                command.setParam(key.fkProperty, key.getIdValue(obj));
-            }
-        }
-
-        protected function setForeignKeyParams(command:SQLParameterisedCommand, foreignKeys:Array):void
-        {
-            for each(var fk:Object in foreignKeys)
-            {
-                command.setParam(fk.property, fk.id);
-            }
-        }
-
-        protected function getForeignKeys(obj:Object, entity:Entity):Array
-        {
-            var foreignKeys:Array = [];
-            for each(var key:Key in entity.keys)
-            {
-                foreignKeys.push({
-                    property: key.fkProperty,
-                    id: key.getIdValue(obj)
-                });
-            }
-            return foreignKeys;
-        }
-
-        protected function getKeyMap(row:Object, entity:Entity):Object
-        {
-            var keyMap:Object = new Object();
-            for each(var key:Key in entity.keys)
-            {
-                var id:int = row[key.column];
-                if (id == 0)
-                    return null;
-
-                keyMap[key.fkProperty] = id;
-            }
-            return keyMap;
-        }
-
-        protected function getFkMap(row:Object, entity:Entity):Object
-        {
-            var fkMap:Object = new Object();
-            for each(var key:Key in entity.keys)
-            {
-                var id:int = row[key.fkColumn];
-                if (id == 0)
-                    return null;
-
-                fkMap[key.fkProperty] = id;
-            }
-            return fkMap;
-        }
-
         protected function getClassName(c:Class):String
         {
             var qname:String = getQualifiedClassName(c);
@@ -254,17 +272,7 @@ package nz.co.codec.flexorm
 
         protected function setCachedValue(obj:Object, entity:Entity):void
         {
-            getCache(entity.name)[getCacheKey(obj, map[entity.name])] = obj;
-        }
-
-        private function getCacheKey(obj:Object, entity:Entity):Object
-        {
-            var cacheKey:Object = new Object();
-            for each(var key:Key in entity.keys)
-            {
-                cacheKey[key.fkProperty] = key.getIdValue(obj);
-            }
-            return cacheKey;
+            getCache(entity.name)[getIdentityMapFromInstance(obj, entity)] = obj;
         }
 
         protected function getCachedAssociationValue(a:Association, row:Object):Object
@@ -272,13 +280,11 @@ package nz.co.codec.flexorm
             var associatedEntity:Entity = a.associatedEntity;
             if (associatedEntity.hasCompositeKey())
             {
-                return getCachedValue(associatedEntity, getFkMap(row, associatedEntity));
+                return getCachedValue(associatedEntity, getIdentityMapFromAssociation(row, associatedEntity));
             }
             else
             {
-                var cacheKey:Object = new Object();
-                cacheKey[associatedEntity.fkProperty] = row[a.fkColumn];
-                return getCachedValue(associatedEntity, cacheKey);
+                return getCachedValue(associatedEntity, { (associatedEntity.fkProperty): row[a.fkColumn] });
             }
         }
 
@@ -318,7 +324,12 @@ package nz.co.codec.flexorm
 
         protected function clearCache():void
         {
-            cacheMap = new Object();
+            cacheMap = {};
+        }
+
+        protected function isDynamicObject(obj:Object):Boolean
+        {
+            return (OBJECT_TYPE == getClassName(getClass(obj)));
         }
 
     }

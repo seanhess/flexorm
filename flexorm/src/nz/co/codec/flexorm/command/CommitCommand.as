@@ -7,13 +7,13 @@ package nz.co.codec.flexorm.command
 
     import mx.rpc.IResponder;
 
-    import nz.co.codec.flexorm.EntityError;
+    import nz.co.codec.flexorm.EntityErrorEvent;
     import nz.co.codec.flexorm.EntityEvent;
     import nz.co.codec.flexorm.ICommand;
 
     public class CommitCommand implements ICommand
     {
-        protected var _sqlConnection:SQLConnection;
+        private var _sqlConnection:SQLConnection;
 
         private var _responder:IResponder;
 
@@ -22,7 +22,7 @@ package nz.co.codec.flexorm.command
             _sqlConnection = sqlConnection;
         }
 
-        public function setResponder(value:IResponder):void
+        public function set responder(value:IResponder):void
         {
             _responder = value;
         }
@@ -30,14 +30,15 @@ package nz.co.codec.flexorm.command
         public function execute():void
         {
             _sqlConnection.commit(new Responder(
-                function(event:SQLEvent):void
+
+                function(ev:SQLEvent):void
                 {
-                    _responder.result(new EntityEvent(event.type));
+                    _responder.result(new EntityEvent(ev.type));
                 },
 
-                function(error:SQLError):void
+                function(e:SQLError):void
                 {
-                    _responder.fault(new EntityError(error.message, error));
+                    _responder.fault(new EntityErrorEvent(e.details, e));
                 }
             ));
         }

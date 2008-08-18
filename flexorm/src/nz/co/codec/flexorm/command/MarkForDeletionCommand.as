@@ -4,23 +4,25 @@ package nz.co.codec.flexorm.command
 
     public class MarkForDeletionCommand extends SQLParameterisedCommand
     {
-        public function MarkForDeletionCommand(table:String, sqlConnection:SQLConnection, debugLevel:int=0)
+        public function MarkForDeletionCommand(
+            sqlConnection:SQLConnection,
+            schema:String,
+            table:String,
+            debugLevel:int=0)
         {
-            super(table, sqlConnection, debugLevel);
+            super(sqlConnection, schema, table, debugLevel);
         }
 
         public function clone():MarkForDeletionCommand
         {
-            var copy:MarkForDeletionCommand = new MarkForDeletionCommand(_table, _sqlConnection);
+            var copy:MarkForDeletionCommand = new MarkForDeletionCommand(_sqlConnection, _schema, _table, _debugLevel);
             copy.filters = _filters;
-            copy.debugLevel = _debugLevel;
             return copy;
         }
 
         override protected function prepareStatement():void
         {
-            var sql:String = "update " + _table +
-                " set marked_for_deletion=true";
+            var sql:String = "update " + _schema + "." + _table + " set marked_for_deletion=true";
             if (_filters)
             {
                 sql += " where ";
@@ -28,8 +30,7 @@ package nz.co.codec.flexorm.command
                 {
                     sql += filter + "=" + _filters[filter] + " and ";
                 }
-                // remove last ' and '
-                sql = sql.substring(0, sql.length - 5);
+                sql = sql.substring(0, sql.length - 5); // remove last ' and '
             }
             _statement.text = sql;
             _changed = false;

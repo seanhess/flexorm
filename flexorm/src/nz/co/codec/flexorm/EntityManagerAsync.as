@@ -8,6 +8,7 @@ package nz.co.codec.flexorm
     import flash.utils.getQualifiedClassName;
 
     import mx.collections.ArrayCollection;
+    import mx.collections.IList;
     import mx.rpc.IResponder;
     import mx.rpc.Responder;
 
@@ -19,23 +20,24 @@ package nz.co.codec.flexorm
     import nz.co.codec.flexorm.command.RollbackCommand;
     import nz.co.codec.flexorm.command.SelectCommand;
     import nz.co.codec.flexorm.command.SelectManyToManyCommand;
-    import nz.co.codec.flexorm.command.SelectManyToManyIndicesCommand;
+    import nz.co.codec.flexorm.command.SelectManyToManyKeysCommand;
+    import nz.co.codec.flexorm.command.SelectSubTypeCommand;
     import nz.co.codec.flexorm.command.UpdateCommand;
+    import nz.co.codec.flexorm.metamodel.AssociatedType;
     import nz.co.codec.flexorm.metamodel.Association;
-    import nz.co.codec.flexorm.metamodel.CompositeIdentity;
+    import nz.co.codec.flexorm.metamodel.CompositeKey;
     import nz.co.codec.flexorm.metamodel.Entity;
     import nz.co.codec.flexorm.metamodel.Field;
-    import nz.co.codec.flexorm.metamodel.Key;
+    import nz.co.codec.flexorm.metamodel.Identity;
     import nz.co.codec.flexorm.metamodel.ManyToManyAssociation;
     import nz.co.codec.flexorm.metamodel.OneToManyAssociation;
-    import nz.co.codec.flexorm.metamodel.PrimaryIdentity;
     import nz.co.codec.flexorm.util.PersistentEntity;
 
     public class EntityManagerAsync extends EntityManagerBase implements IEntityManagerAsync
     {
         private static var _instance:EntityManagerAsync;
 
-        private static var localInstantiation:Boolean = false;
+        private static var localInstantiation:Boolean;
 
         public static function get instance():EntityManagerAsync
         {
@@ -48,51 +50,95 @@ package nz.co.codec.flexorm
             return _instance;
         }
 
-        private var inTransaction:Boolean = false;
-
+        /**
+         * EntityManagerAsync is a Singleton.
+         */
         public function EntityManagerAsync()
         {
             super();
             if (!localInstantiation)
             {
-                throw new Error("EntityManagerAsync is a singleton. Use EntityManagerAsync.instance");
+                throw new Error("EntityManagerAsync is a singleton. Use EntityManagerAsync.instance ");
             }
         }
 
+//        private var running:Boolean;
+
+        private var inTransaction:Boolean;
+
+        private var dbFile:File;
+
+//        private function newEntityManagerAsync():EntityManagerAsync
+//        {
+//            localInstantiation = true;
+//            var instance:EntityManagerAsync = new EntityManagerAsync();
+//            localInstantiation = false;
+//            instance.entityMap = this.entityMap;
+//            instance.opt = this.opt;
+//            instance.sqlConnection = this.sqlConnection;
+//            return instance;
+//        }
+
+        /**
+         * Opens an asynchronous connection to the database.
+         */
         public function openAsyncConnection(dbFilename:String, responder:IResponder):void
         {
-            var dbFile:File = File.applicationStorageDirectory.resolvePath(dbFilename);
-            _sqlConnection = new SQLConnection();
+            dbFile = File.applicationStorageDirectory.resolvePath(dbFilename);
+            sqlConnection = new SQLConnection();
 
-            var openHandler:Function = function(event:SQLEvent):void
+            var openHandler:Function = function(ev:SQLEvent):void
             {
-                _sqlConnection.removeEventListener(SQLEvent.OPEN, openHandler);
-                _sqlConnection.removeEventListener(SQLErrorEvent.ERROR, openHandler);
-                responder.result(event);
+                sqlConnection.removeEventListener(SQLEvent.OPEN, openHandler);
+                sqlConnection.removeEventListener(SQLErrorEvent.ERROR, errorHandler);
+                responder.result(ev);
             }
-            _sqlConnection.addEventListener(SQLEvent.OPEN, openHandler);
+            sqlConnection.addEventListener(SQLEvent.OPEN, openHandler);
 
-            var errorHandler:Function = function(error:SQLErrorEvent):void
+            var errorHandler:Function = function(e:SQLErrorEvent):void
             {
-                _sqlConnection.removeEventListener(SQLEvent.OPEN, errorHandler);
-                _sqlConnection.removeEventListener(SQLErrorEvent.ERROR, errorHandler);
-                responder.fault(error);
+                sqlConnection.removeEventListener(SQLEvent.OPEN, openHandler);
+                sqlConnection.removeEventListener(SQLErrorEvent.ERROR, errorHandler);
+                responder.fault(e);
             }
-            _sqlConnection.addEventListener(SQLErrorEvent.ERROR, errorHandler);
+            sqlConnection.addEventListener(SQLErrorEvent.ERROR, errorHandler);
 
-            _sqlConnection.openAsync(dbFile);
-            introspector = null;
+            sqlConnection.openAsync(dbFile);
         }
 
-        override public function get sqlConnection():SQLConnection
+        public function closeAsyncConnection(responder:IResponder):void
         {
-            return _sqlConnection;
+            if (sqlConnection.connected)
+            {
+                var closeHandler:Function = function(ev:SQLEvent):void
+                {
+                    sqlConnection.removeEventListener(SQLEvent.CLOSE, closeHandler);
+                    sqlConnection.removeEventListener(SQLErrorEvent.ERROR, errorHandler);
+                    responder.result(ev);
+                }
+                sqlConnection.addEventListener(SQLEvent.CLOSE, closeHandler);
+
+                var errorHandler:Function = function(e:SQLErrorEvent):void
+                {
+                    sqlConnection.removeEventListener(SQLEvent.CLOSE, closeHandler);
+                    sqlConnection.removeEventListener(SQLErrorEvent.ERROR, errorHandler);
+                    responder.fault(e);
+                }
+                sqlConnection.addEventListener(SQLErrorEvent.ERROR, errorHandler);
+
+                sqlConnection.close();
+            }
+        }
+
+        public function deleteDBFile():void
+        {
+            dbFile.deleteFile();
         }
 
         public function startTransaction(responder:IResponder):void
         {
             var beginCommand:BeginCommand = new BeginCommand(sqlConnection);
-            beginCommand.setResponder(responder);
+            beginCommand.responder = responder;
             beginCommand.execute();
             inTransaction = true;
         }
@@ -100,30 +146,34 @@ package nz.co.codec.flexorm
         public function endTransaction(responder:IResponder):void
         {
             var commitCommand:CommitCommand = new CommitCommand(sqlConnection);
-            commitCommand.setResponder(new Responder(
+            commitCommand.responder = new Responder(
+
                 function(event:EntityEvent):void
                 {
                     responder.result(event);
                     inTransaction = false;
                 },
-                function(error:EntityError):void
+
+                function(error:EntityErrorEvent):void
                 {
                     if (sqlConnection.inTransaction)
                     {
                         var rollbackCommand:RollbackCommand = new RollbackCommand(sqlConnection);
-                        rollbackCommand.setResponder(new Responder(
+                        rollbackCommand.responder = new Responder(
+
                             function(ev:EntityEvent):void
                             {
                                 error.message = "Rollback successful: " + error.message;
                                 responder.fault(error);
                             },
-                            function(e:EntityError):void
+
+                            function(e:EntityErrorEvent):void
                             {
                                 trace("Rollback failed!!!");
                                 error.message = e.message + ": " + error.message;
                                 responder.fault(error);
                             }
-                        ));
+                        );
                     }
                     else
                     {
@@ -131,136 +181,184 @@ package nz.co.codec.flexorm
                     }
                     inTransaction = false;
                 }
-            ));
+            );
+        }
+
+        private function getEntityForObject(obj:Object, q:BlockingExecutor):Entity
+        {
+            var c:Class = (obj is PersistentEntity)?
+                obj.__class :
+                Class(getDefinitionByName(getQualifiedClassName(obj)));
+            return getEntity(c, q);
+        }
+
+        private function getEntity(cls:Class, q:BlockingExecutor):Entity
+        {
+            var c:Class = (cls is PersistentEntity)? cls.__class : cls;
+            var cn:String = getClassName(c);
+            var entity:Entity = entityMap[cn];
+            if (entity == null || !entity.initialisationComplete)
+            {
+                entity = introspector.loadMetadata(c, q);
+            }
+            return entity;
+        }
+
+        private function createBlockingExecutor(responder:IResponder, finalHandler:Function=null):BlockingExecutor
+        {
+            var q:BlockingExecutor = new BlockingExecutor();
+            q.debugLevel = debugLevel;
+            q.responder = responder;
+            q.finalHandler = finalHandler;
+            return q;
         }
 
         public function findAll(cls:Class, responder:IResponder):void
         {
-            var c:Class = (cls is PersistentEntity)? cls.myClass : cls;
-            var cn:String = getClassName(c);
-            var entity:Entity = map[cn];
-
-            var q:BlockingExecutor = new BlockingExecutor();
-            q.setResponder(responder);
-            if (entity == null || !entity.initialisationComplete)
+            var q:BlockingExecutor = createBlockingExecutor(responder, function(data:Object):void
             {
-                entity = introspector.loadMetadata(c, null, q);
-            }
-            q.addCommand(entity.findAllCommand.clone());
-            q.addFunction(function(data:Object):void
+                clearCache();
+            });
+            var entity:Entity = getEntity(cls, q);
+            q.add(entity.findAllCommand.clone(), function(data:Object):void
             {
-                if (data)
-                {
-                    q.response = typeArray(data as Array, entity, q);
-
-                    // Causing an issue when fetching graphs
-                    // Operation cannot be performed while SQLStatement.executing is true.
-//                    q.response = typeArray(data as Array, entity, q.branchNonBlocking());
-                }
-                else
-                {
-                    debug("Find all of " + entity.name + " failed");
-                }
+                q.data = typeArray(data as Array, entity, q.branchBlocking());
             });
             q.execute();
         }
 
-        public function loadOneToManyAssociation(a:OneToManyAssociation, id:int, responder:IResponder):void
+        public function loadOneToManyAssociation(a:OneToManyAssociation, idMap:Object, responder:IResponder):void
         {
-            var c:Class = a.associatedEntity.cls;
-            var cn:String = getClassName(c);
-            var entity:Entity = map[cn];
-
-            var q:BlockingExecutor = new BlockingExecutor();
-            q.setResponder(responder);
-            if (entity == null || !entity.initialisationComplete)
+            var branch:BlockingExecutor;
+            var q:BlockingExecutor = createBlockingExecutor(responder, function(data:Object):void
             {
-                entity = introspector.loadMetadata(c, null, q);
-            }
-            var selectCommand:SelectCommand = a.selectCommand.clone();
-            selectCommand.setParam(a.ownerEntity.fkProperty, id);
-            q.addCommand(selectCommand);
-            q.addFunction(function(data:Object):void
-            {
-                if (data)
-                {
-                    q.response = typeArray(data as Array, entity, q);
-                }
-                else
-                {
-                    debug("Select one-to-many of " +
-                          a.associatedEntity.name + " with " +
-                          a.ownerEntity.fkProperty + ": " + id + " failed");
-                }
+                q.data = branch.data;
+                clearCache();
             });
+            branch = q.branchBlocking();
+            loadOneToManyAssociationInternal(a, idMap, branch);
             q.execute();
-
         }
 
-        public function loadManyToManyAssociation(a:ManyToManyAssociation, id:int, responder:IResponder):void
+        private function loadOneToManyAssociationInternal(a:OneToManyAssociation, idMap:Object, q:BlockingExecutor):void
         {
-            var c:Class = a.associatedEntity.cls;
-            var cn:String = getClassName(c);
-            var entity:Entity = map[cn];
-
-            var q:BlockingExecutor = new BlockingExecutor();
-            q.setResponder(responder);
-            if (entity == null || !entity.initialisationComplete)
+            var items:Array = [];
+            q.finalHandler = function(data:Object):void
             {
-                entity = introspector.loadMetadata(c, null, q);
+                if (a.indexed)
+                    items.sortOn("index");
+
+                var result:ArrayCollection = new ArrayCollection();
+                for each(var it:Object in items)
+                {
+                    result.addItem(typeObject(it.row, it.associatedEntity, q));
+                }
+                q.data = result;
+            };
+            for each(var type:AssociatedType in a.associatedTypes)
+            {
+                loadAssociatedType(a, items, type, idMap, q);
             }
-            var selectCommand:SelectManyToManyCommand = a.selectCommand.clone();
-            selectCommand.setParam(a.ownerEntity.fkProperty, id);
-            q.addCommand(selectCommand);
-            q.addFunction(function(data:Object):void
-            {
-                if (data)
-                {
-                    q.response = typeArray(data as Array, entity, q);
-                }
-                else
-                {
-                    debug("Select many-to-many of " + a.associationTable +
-                          " with " + a.ownerEntity.fkProperty + ": " + id +
-                          " failed");
-                }
-            });
-            q.execute();
-
         }
 
-        public function loadItem(cls:Class, id:int, responder:IResponder):void
+        private function loadAssociatedType(
+            a:OneToManyAssociation,
+            items:Array,
+            type:AssociatedType,
+            idMap:Object,
+            q:BlockingExecutor):void
         {
-            var c:Class = (cls is PersistentEntity)? cls.myClass : cls;
-            var cn:String = getClassName(c);
-            var entity:Entity = map[cn];
-
-            var q:BlockingExecutor = new BlockingExecutor();
-            q.setResponder(responder);
-            if (entity == null || !entity.initialisationComplete)
-            {
-                entity = introspector.loadMetadata(c, null, q);
-            }
-            if (entity.hasCompositeKey())
-            {
-                throw new Error("Entity '" + entity.name +
-                    "' has a composite key. Use EntityManagerAsync.loadItemByCompositeKey instead.");
-            }
-
-            var selectCommand:SelectCommand = entity.selectCommand.clone();
-            selectCommand.setParam(entity.pk.property, id);
-            q.addCommand(selectCommand);
-            q.addFunction(function(data:Object):void
+            var associatedEntity:Entity = type.associatedEntity;
+            var selectCmd:SelectCommand = type.selectCommand.clone();
+            setIdentMapParams(selectCmd, idMap);
+            q.add(selectCmd, function(data:Object):void
             {
                 if (data)
                 {
-                    q.response = typeObject(data[0], entity, q);
+                    var row:Object;
+                    if (associatedEntity.isSuperEntity)
+                    {
+                        var subTypes:Object = {};
+                        for each(row in data)
+                        {
+                            subTypes[row.entity_type] = null;
+                        }
+                        for (var subType:String in subTypes)
+                        {
+                            loadSubType(a, items, associatedEntity, subType, idMap, q);
+                        }
+                    }
+                    else
+                    {
+                        for each(row in data)
+                        {
+                            items.push(
+                            {
+                                associatedEntity: associatedEntity,
+                                index           : row[a.indexColumn],
+                                row             : row
+                            });
+                        }
+                    }
                 }
-                else
+            });
+        }
+
+        private function loadSubType(
+            a:OneToManyAssociation,
+            items:Array,
+            associatedEntity:Entity,
+            subType:String,
+            idMap:Object,
+            q:BlockingExecutor):void
+        {
+            var subClass:Class = getDefinitionByName(subType) as Class;
+            var subEntity:Entity = getEntity(subClass, q);
+            var selectSubTypeCmd:SelectSubTypeCommand = subEntity.selectSubTypeCmd.clone();
+            selectSubTypeCmd.parentTable = associatedEntity.table;
+            var ownerEntity:Entity = a.ownerEntity;
+            if (ownerEntity.hasCompositeKey())
+            {
+                for each(var identity:Identity in ownerEntity.identities)
                 {
-                    q.fault(new EntityError(debug("Load of " + entity.name +
-                        " with id: " + id + " failed")));
+                    selectSubTypeCmd.addFilter(identity.fkColumn, identity.fkProperty);
+                    selectSubTypeCmd.setParam(identity.fkProperty, idMap[identity.fkProperty]);
                 }
+            }
+            else
+            {
+                selectSubTypeCmd.addFilter(a.fkColumn, a.fkProperty);
+                selectSubTypeCmd.setParam(a.fkProperty, idMap[a.fkProperty]);
+            }
+            if (a.indexed)
+                selectSubTypeCmd.indexColumn = a.indexColumn;
+
+            q.add(selectSubTypeCmd, function(data:Object):void
+            {
+                for each(var row:Object in data)
+                {
+                    items.push(
+                    {
+                        associatedEntity: subEntity,
+                        index           : row[a.indexColumn],
+                        row             : row
+                    });
+                }
+            });
+        }
+
+        /**
+         * Return a list of the associated objects in a many-to-many association
+         * using a map of the key values (fkProperty : value).
+         */
+        public function loadManyToManyAssociation(a:ManyToManyAssociation, idMap:Object, responder:IResponder):void
+        {
+            var q:BlockingExecutor = createBlockingExecutor(responder);
+            var selectCmd:SelectManyToManyCommand = a.selectCommand.clone();
+            setIdentMapParams(selectCmd, idMap);
+            q.add(selectCmd, function(data:Object):void
+            {
+                q.data = typeArray(data as Array, a.associatedEntity, q);
             });
             q.execute();
         }
@@ -270,48 +368,117 @@ package nz.co.codec.flexorm
             loadItem(cls, id, responder);
         }
 
-        public function loadItemByCompositeKey(cls:Class, compositeKeys:Array, responder:IResponder):void
+        public function loadItem(cls:Class, id:int, responder:IResponder):void
         {
-            var c:Class = (cls is PersistentEntity)? cls.myClass : cls;
-            var cn:String = getClassName(c);
-            var entity:Entity = map[cn];
-
-            var q:BlockingExecutor = new BlockingExecutor("loadItemByCompositeKey", debugLevel);
-            q.setResponder(responder);
-            if (entity == null || !entity.initialisationComplete)
+//            if (running)
+//            {
+//                return newEntityManagerAsync().loadItem(cls, id, responder);
+//            }
+//            else
+//            {
+//                running = true;
+//            }
+            var q:BlockingExecutor = createBlockingExecutor(responder, function(data:Object):void
             {
-                entity = introspector.loadMetadata(c, null, q);
+                clearCache();
+//                running = false;
+            });
+            var entity:Entity = getEntity(cls, q);
+            if (entity.hasCompositeKey())
+            {
+                throw new Error("Entity '" + entity.name + "' has a composite key. " +
+                                "Use EntityManagerAsync.loadItemByCompositeKey instead. ");
             }
+            loadComplexEntity(entity, getIdentityMap(entity.fkProperty, id), q);
+            q.execute();
+        }
+
+        private function loadComplexEntity(entity:Entity, idMap:Object, q:BlockingExecutor):void
+        {
+            var selectCmd:SelectCommand = entity.selectCommand.clone();
+            setIdentMapParams(selectCmd, idMap);
+            q.add(selectCmd, function(data:Object):void
+            {
+                if (data)
+                {
+                    var row:Object = data[0];
+
+                    // Add to cache to avoid reselecting from database
+                    q.data = typeObject(row, entity, q);
+
+                    if (entity.isSuperEntity)
+                    {
+                        var subType:String = row.entity_type;
+                        if (subType)
+                        {
+                            var subClass:Class = getDefinitionByName(subType) as Class;
+                            var subEntity:Entity = getEntity(subClass, q);
+                            if (subEntity == null)
+                                throw new Error("Cannot find entity of type " + subType);
+
+                            var map:Object = entity.hasCompositeKey() ?
+                                getIdentityMapFromRow(row, subEntity) :
+                                getIdentityMap(subEntity.fkProperty, idMap[entity.fkProperty]);
+
+                            var value:Object = getCachedValue(subEntity, map);
+                            if (value)
+                            {
+                                q.data = value;
+                            }
+                            else
+                            {
+                                loadComplexEntity(subEntity, map, q);
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    q.fault(new EntityErrorEvent(debug("Load of " + entity.name + " failed. ")));
+                }
+            });
+        }
+
+        private function loadEntity(entity:Entity, idMap:Object, q:BlockingExecutor):void
+        {
+            var selectCmd:SelectCommand = entity.selectCommand.clone();
+            setIdentMapParams(selectCmd, idMap);
+            q.add(selectCmd, function(data:Object):void
+            {
+                if (data)
+                {
+                    q.data = typeObject(data[0], entity, q);
+                }
+                else
+                {
+                    q.fault(new EntityErrorEvent(debug("Load of " + entity.name + " failed. ")));
+                }
+            });
+        }
+
+        public function loadItemByCompositeKey(cls:Class, keys:Array, responder:IResponder):void
+        {
+            var q:BlockingExecutor = createBlockingExecutor(responder, function(data:Object):void
+            {
+                clearCache();
+            });
+            var entity:Entity = getEntity(cls, q);
             if (!entity.hasCompositeKey())
             {
                 throw new Error("Entity '" + entity.name +
-                    "' does not have a composite key. Use EntityManagerAsync.load instead.");
+                    "' does not have a composite key. Use EntityManagerAsync.loadItem instead. ");
             }
-
-            var selectCommand:SelectCommand = entity.selectCommand;
-            for each(var obj:Object in compositeKeys)
+            var idMap:Object = {};
+            for each(var obj:Object in keys)
             {
-                var keyClass:Class = (obj is PersistentEntity)?
-                    obj.myClass :
-                    Class(getDefinitionByName(getQualifiedClassName(obj)));
-                var keyCN:String = getClassName(keyClass);
-                var keyEntity:Entity = map[keyCN];
-                if (keyEntity == null || !keyEntity.initialisationComplete)
-                {
-                    keyEntity = introspector.loadMetadata(c, null, q);
-                }
-                var key:Key;
+                var keyEntity:Entity = getEntityForObject(obj, q);
 
-                // validate if key is a specified identifier for entity
+                // Validate if key is a specified identifier for entity
                 var match:Boolean = false;
-                for each(var identity:CompositeIdentity in entity.identities)
+                for each(var key:CompositeKey in entity.keys)
                 {
-                    if (identity.associatedEntity.name == keyEntity.name)
+                    if (keyEntity.equals(key.associatedEntity))
                     {
-                        for each(key in keyEntity.keys)
-                        {
-                            selectCommand.setParam(key.fkProperty, key.getIdValue(obj));
-                        }
                         match = true;
                         break;
                     }
@@ -322,106 +489,112 @@ package nz.co.codec.flexorm
                 if (!match)
                 {
                     trace("Key of type '" + keyEntity.name +
-                            "' not specified as an identifier for '" +
-                            entity.name + "'.");
+                          "' not specified as an identifier for '" + entity.name + "'. ");
 
                     for each(var a:Association in entity.manyToOneAssociations)
                     {
-                        if (a.associatedEntity.name == keyEntity.name)
+                        if (keyEntity.equals(a.associatedEntity))
                         {
                             trace("Key type '" + keyEntity.name +
-                                    "' is used in a many-to-one association, so will allow.");
-
-                            for each(key in keyEntity.keys)
-                            {
-                                selectCommand.setParam(key.fkProperty, key.getIdValue(obj));
-                            }
+                                  "' is used in a many-to-one association, so will allow. ");
                             match = true;
                             break;
                         }
                     }
                 }
-                if (!match)
-                    throw new Error("Invalid key of type '" + keyEntity.name + "' specified.");
-            }
-
-            q.addCommand(selectCommand, "select " + entity.name);
-            q.addFunction(function(data:Object):void
-            {
-                if (data)
+                if (match)
                 {
-                    q.response = typeObject(data[0], entity, q);
+                    idMap = combineMaps([idMap, getIdentityMapFromInstance(obj, keyEntity)]);
                 }
                 else
                 {
-                    q.fault(new EntityError(debug("Load of " + entity.name +
-                        " with composite keys failed")));
+                    throw new Error("Invalid key of type '" + keyEntity.name + "' specified. ");
                 }
-            }, "type object");
+            }
+            loadComplexEntity(entity, idMap, q);
             q.execute();
-
         }
 
-        public function save(obj:Object, responder:IResponder):void
+        /**
+         * Insert or update an object into the database, depending on
+         * whether the object is new (determined by an id > 0). Metadata
+         * for the object, and all associated objects, will be loaded on a
+         * just-in-time basis. The save operation and all cascading saves
+         * are enclosed in a transaction to ensure the database is left in
+         * a consistent state.
+         *
+         * Options:
+         *
+         * Externally set:
+         * - ownerClass:Class
+         *     Must be set if client code specifies an indexValue, to determine
+         *     the class that owns the indexed list
+         * - indexValue:int
+         *     May be set by client code when saving an indexed object directly
+         *
+         * Internally set:
+         * - name:String
+         * - a:Association (OneToMany || ManyToMany)
+         * - associatedEntity:Entity
+         * - idMap:Object
+         * - mtmInsertCmd:InsertCommand
+         * - indexValue:int
+         */
+        public function save(obj:Object, responder:IResponder, opt:Object=null):void
         {
-            var q:BlockingExecutor = new BlockingExecutor();
-            q.setResponder(responder);
+            if (obj == null)
+                return;
+
+            if (opt == null)
+                opt = {};
+
+            var q:BlockingExecutor = createBlockingExecutor(responder, function(data:Object):void
+            {
+                clearCache();
+            });
 
             // if not already part of a programmer-defined transaction, then
             // start one to group all cascade 'save-update' operations
             if (!inTransaction)
             {
-                q.addCommand(new BeginCommand(sqlConnection));
-                saveItem(obj, q);
-                q.addCommand(new CommitCommand(sqlConnection));
+                q.add(new BeginCommand(sqlConnection));
+                saveItem(obj, q, opt);
+                q.add(new CommitCommand(sqlConnection));
             }
             else
             {
-                saveItem(obj, q);
+                saveItem(obj, q, opt);
             }
             q.execute();
         }
 
-        private function saveItem(
-            obj:Object,
-            q:BlockingExecutor,
-            foreignKeys:Array=null,
-            mtmInsertCommand:InsertCommand=null,
-            idx:Object=null):void
+        private function saveItem(obj:Object, q:BlockingExecutor, opt:Object):void
         {
             if (obj == null)
                 return;
 
-            var c:Class = getClass(obj);
-            var cn:String = getClassName(c);
-            var entity:Entity = map[cn];
-            if (entity == null || !entity.initialisationComplete)
-            {
-                entity = introspector.loadMetadata(c, null, q);
-            }
-
+            var entity:Entity = getEntityForObject(obj, q);
             if (entity.hasCompositeKey())
             {
-                var selectCommand:SelectCommand = entity.selectCommand;
-                for each(var identity:CompositeIdentity in entity.identities)
+                var selectCmd:SelectCommand = entity.selectCommand;
+
+                // Validate that each composite key is not null.
+                for each(var key:CompositeKey in entity.keys)
                 {
-                    var keyVal:Object = obj[identity.property];
-                    if (keyVal == null)
-                    {
-                        throw new Error("Object of type '" + entity.className + "' has a null key.");
-                    }
+                    var value:Object = obj[key.property];
+                    if (value == null)
+                        throw new Error("Object of type '" + entity.name + "' has a null key. ");
                 }
-                setKeyParams(selectCommand, obj, entity);
-                q.addCommand(selectCommand);
-                q.addFunction(function(data:Object):void
+                setIdentityParams(selectCmd, obj, entity);
+                q.add(selectCmd, function(data:Object):void
                 {
                     if (data)
                     {
-                        updateItem(entity.updateCommand.clone(), obj, entity, q, foreignKeys, mtmInsertCommand, idx);
+                        updateItem(entity.updateCommand.clone(), obj, entity, q, opt);
                     }
                     else
                     {
-                        createItem(entity.insertCommand.clone(), obj, entity, q, foreignKeys, mtmInsertCommand, idx);
+                        createItem(entity.insertCommand.clone(), obj, entity, q, opt);
                     }
                 });
             }
@@ -430,134 +603,189 @@ package nz.co.codec.flexorm
                 var id:int = obj[entity.pk.property];
                 if (id > 0)
                 {
-                    updateItem(entity.updateCommand.clone(), obj, entity, q, foreignKeys, mtmInsertCommand, idx);
+                    updateItem(entity.updateCommand.clone(), obj, entity, q, opt);
                 }
                 else
                 {
-                    createItem(entity.insertCommand.clone(), obj, entity, q, foreignKeys, mtmInsertCommand, idx);
+                    createItem(entity.insertCommand.clone(), obj, entity, q, opt);
                 }
             }
         }
 
         private function createItem(
-            insertCommand:InsertCommand,
+            insertCmd:InsertCommand,
             obj:Object,
             entity:Entity,
             q:BlockingExecutor,
-            foreignKeys:Array,
-            mtmInsertCommand:InsertCommand,
-            idx:Object):void
+            opt:Object):void
         {
             saveManyToOneAssociations(obj, entity, q.branchNonBlocking());
-            createSuperEntity(insertCommand, obj, entity.superEntity, q);
-            setInsertTimestampParams(insertCommand);
-
-            if (syncSupport && !entity.hasCompositeKey())
+            if (entity.superEntity)
             {
-                insertCommand.setParam("serverId", 0);
+                opt.subInsertCmd = insertCmd;
+                opt.entityType = getQualifiedClassName(entity.cls);
+                opt.fkProperty = entity.fkProperty;
+                createItem(entity.superEntity.insertCommand.clone(), obj, entity.superEntity, q, opt);
             }
-            insertCommand.setParam("markedForDeletion", false);
-            setFieldParams(insertCommand, obj, entity);
-            setManyToOneAssociationParams(insertCommand, obj, entity);
+            setFieldParams(insertCmd, obj, entity);
+            setManyToOneAssociationParams(insertCmd, obj, entity);
+            setInsertTimestampParams(insertCmd);
 
-            if (foreignKeys && !mtmInsertCommand)
+            if (entity.isSuperEntity)
             {
-                if (foreignKeys.length == 1)
+                insertCmd.setParam("entityType", opt.entityType);
+            }
+            if (opt.syncSupport && !entity.hasCompositeKey())
+            {
+                insertCmd.setParam("version", 0);
+                insertCmd.setParam("serverId", 0);
+            }
+            insertCmd.setParam("markedForDeletion", false);
+
+            // if this obj is an item of a one-to-many association and matches
+            // the specific entity, that is the object of the association, in
+            // the entity's inheritance hierarchy...
+            if ((opt.a is OneToManyAssociation) && entity.equals(opt.associatedEntity))
+            {
+                if (opt.hasCompositeKey)
                 {
-                    q.addFunction(function(data:Object):void
-                    {
-                        insertCommand.setParam(foreignKeys[0].property, q.parent.parent.id);
-                    });
+                    setIdentMapParams(insertCmd, opt.idMap);
                 }
                 else
                 {
-                    setForeignKeyParams(insertCommand, foreignKeys);
+                    q.addFunction(function(data:Object):void
+                    {
+                        insertCmd.setParam(opt.a.fkProperty, q.parent.parent.id);
+                    });
                 }
-                if (idx)
+                if (opt.a.indexed)
+                    insertCmd.setParam(opt.a.indexProperty, opt.indexValue);
+            }
+            if (opt.a == null)
+            {
+                for each(var a:OneToManyAssociation in entity.oneToManyInverseAssociations)
                 {
-                    insertCommand.setParam(idx.property, idx.value);
+                    if (a.indexed)
+                    {
+                         // specified by client code
+                        if ((a.ownerEntity.cls == opt.ownerClass) && opt.indexValue)
+                        {
+                            insertCmd.setParam(a.indexProperty, opt.indexValue);
+                        }
+                        else
+                        {
+                            insertCmd.setParam(a.indexProperty, 0);
+                        }
+                    }
                 }
             }
-            q.addCommand(insertCommand);
-            q.addFunction(function(data:Object):void
+            q.add(insertCmd, function(data:Object):void
             {
-                if (!entity.hasCompositeKey() && !entity.superEntity)
+                if (!entity.hasCompositeKey() && (entity.superEntity == null))
                 {
+                    var subInsertCmd:InsertCommand = opt.subInsertCmd;
+                    if (subInsertCmd)
+                        subInsertCmd.setParam(opt.fkProperty, data);
+
                     obj[entity.pk.property] = data;
+                    q.id = data as int;
+                    q.label = entity.name;
                 }
-                q.id = data as int;
-                q.response = obj;
+                q.data = obj;
             });
-            if (foreignKeys && mtmInsertCommand)
+
+            // The mtmInsertCommand must be executed after the associated entity
+            // has been inserted to maintain referential integrity
+            if ((opt.a is ManyToManyAssociation) && entity.equals(opt.associatedEntity))
             {
-                if (foreignKeys.length == 1)
+                var mtmInsertCmd:InsertCommand = opt.mtmInsertCmd;
+                if (opt.hasCompositeKey)
                 {
-                    q.addFunction(function(data:Object):void
-                    {
-                        mtmInsertCommand.setParam(entity.fkProperty, data);
-                        mtmInsertCommand.setParam(foreignKeys[0].property, q.parent.parent.parent.parent.id);
-                    });
+                    setIdentityParams(mtmInsertCmd, obj, entity);
+                    setIdentMapParams(mtmInsertCmd, opt.idMap);
                 }
                 else
                 {
-                    setFkParams(mtmInsertCommand, obj, entity);
-                    setForeignKeyParams(mtmInsertCommand, foreignKeys);
+                    q.addFunction(function(data:Object):void
+                    {
+                        mtmInsertCmd.setParam(entity.fkProperty, data);
+                        mtmInsertCmd.setParam(opt.a.ownerEntity.fkProperty, q.parent.parent.id);
+                    });
                 }
-                if (idx)
-                {
-                    mtmInsertCommand.setParam(idx.property, idx.value);
-                }
-                q.addCommand(mtmInsertCommand);
+                if (opt.a.indexed)
+                    mtmInsertCmd.setParam(opt.a.indexProperty, opt.indexValue);
+
+                q.add(mtmInsertCmd);
             }
+
+            var idMap:Object = getIdentityMapFromInstance(obj, entity);
             var executor:NonBlockingExecutor = q.branchNonBlocking();
-            saveOneToManyAssociations(obj, entity, executor);
-            for each(var a:ManyToManyAssociation in entity.manyToManyAssociations)
+            saveOneToManyAssociations(obj, entity, idMap, executor);
+            for each(var mtm:ManyToManyAssociation in entity.manyToManyAssociations)
             {
-                saveManyToManyAssociation(obj, a, executor.branchBlocking());
+                saveManyToManyAssociation(obj, false, mtm, idMap, executor.branchBlocking());
             }
         }
 
         private function updateItem(
-            updateCommand:UpdateCommand,
+            updateCmd:UpdateCommand,
             obj:Object,
             entity:Entity,
             q:BlockingExecutor,
-            foreignKeys:Array,
-            mtmInsertCommand:InsertCommand,
-            idx:Object):void
+            opt:Object):void
         {
             saveManyToOneAssociations(obj, entity, q.branchNonBlocking());
-            updateSuperEntity(updateCommand, obj, entity.superEntity, q);
-            setKeyParams(updateCommand, obj, entity);
-            setUpdateTimestampParams(updateCommand);
-            setFieldParams(updateCommand, obj, entity);
-            setManyToOneAssociationParams(updateCommand, obj, entity);
+            if (entity.superEntity)
+                updateItem(entity.superEntity.updateCommand.clone(), obj, entity.superEntity, q, opt);
+            setIdentityParams(updateCmd, obj, entity);
+            setFieldParams(updateCmd, obj, entity);
+            setManyToOneAssociationParams(updateCmd, obj, entity);
+            setUpdateTimestampParams(updateCmd);
 
-            if (foreignKeys && mtmInsertCommand == null)
+            if ((opt.a is OneToManyAssociation) && entity.equals(opt.associatedEntity))
             {
-                setForeignKeyParams(updateCommand, foreignKeys);
-                if (idx)
+                setIdentMapParams(updateCmd, opt.idMap);
+                if (opt.a.indexed)
+                    updateCmd.setParam(opt.a.indexProperty, opt.indexValue);
+            }
+            if (opt.a == null)
+            {
+                for each(var a:OneToManyAssociation in entity.oneToManyInverseAssociations)
                 {
-                    updateCommand.setParam(idx.property, idx.value);
+                    if (a.indexed)
+                    {
+                         // specified by client code
+                        if ((a.ownerEntity.cls == opt.ownerClass) && opt.indexValue)
+                        {
+                            updateCmd.setParam(a.indexProperty, opt.indexValue);
+                        }
+                        else
+                        {
+                            updateCmd.setParam(a.indexProperty, 0);
+                        }
+                    }
                 }
             }
-            q.addCommand(updateCommand);
-            q.response = obj;
-            if (foreignKeys && mtmInsertCommand)
+            q.add(updateCmd);
+            q.data = obj;
+
+            if ((opt.a is ManyToManyAssociation) && entity.equals(opt.associatedEntity))
             {
-                setFkParams(mtmInsertCommand, obj, entity);
-                setForeignKeyParams(mtmInsertCommand, foreignKeys);
-                if (idx)
-                {
-                    mtmInsertCommand.setParam(idx.property, idx.value);
-                }
-                q.addCommand(mtmInsertCommand);
+                var mtmInsertCmd:InsertCommand = opt.mtmInsertCmd;
+                setIdentityParams(mtmInsertCmd, obj, entity);
+                setIdentMapParams(mtmInsertCmd, opt.idMap);
+                if (opt.a.indexed)
+                    mtmInsertCmd.setParam(opt.a.indexProperty, opt.indexValue);
+
+                q.add(mtmInsertCmd);
             }
+
+            var idMap:Object = getIdentityMapFromInstance(obj, entity);
             var executor:NonBlockingExecutor = q.branchNonBlocking();
-            saveOneToManyAssociations(obj, entity, executor);
-            for each(var a:ManyToManyAssociation in entity.manyToManyAssociations)
+            saveOneToManyAssociations(obj, entity, idMap, executor);
+            for each(var mtm:ManyToManyAssociation in entity.manyToManyAssociations)
             {
-                saveManyToManyAssociation(obj, a, executor.branchBlocking());
+                saveManyToManyAssociation(obj, true, mtm, idMap, executor.branchBlocking());
             }
         }
 
@@ -567,149 +795,92 @@ package nz.co.codec.flexorm
             {
                 var value:Object = obj[a.property];
                 if (value && !a.inverse && isCascadeSave(a))
-                {
-                    saveItem(value, executor.branchBlocking());
-                }
+                    saveItem(value, executor.branchBlocking(), {});
             }
         }
 
-        private function createSuperEntity(
-            insertCommand:InsertCommand,
-            obj:Object,
-            superEntity:Entity,
-            q:BlockingExecutor):void
+        private function saveOneToManyAssociations(obj:Object, entity:Entity, idMap:Object, executor:NonBlockingExecutor):void
         {
-            if (superEntity == null)
-                return;
-
-            saveManyToOneAssociations(obj, superEntity, q.branchNonBlocking());
-            var superInsertCommand:InsertCommand = superEntity.insertCommand;
-
-            if (syncSupport && !superEntity.hasCompositeKey())
-            {
-                superInsertCommand.setParam("serverId", 0);
-            }
-            superInsertCommand.setParam("markedForDeletion", false);
-
-            setFieldParams(superInsertCommand, obj, superEntity);
-            setManyToOneAssociationParams(superInsertCommand, obj, superEntity);
-            setInsertTimestampParams(superInsertCommand);
-            q.addCommand(superInsertCommand);
-            q.addFunction(function(data:Object):void
-            {
-                var id:int = int(data);
-                if (id > 0)
-                {
-                    var pk:PrimaryIdentity = superEntity.pk;
-                    insertCommand.setParam(pk.property, id);
-                    obj[pk.property] = id;
-                }
-                else
-                {
-                    q.fault(new EntityError(debug("Insert of '" + superEntity.className + "' failed")));
-                }
-            });
-        }
-
-        private function updateSuperEntity(
-            updateCommand:UpdateCommand,
-            obj:Object,
-            superEntity:Entity,
-            q:BlockingExecutor):void
-        {
-            if (superEntity == null)
-                return;
-
-            saveManyToOneAssociations(obj, superEntity, q.branchNonBlocking());
-            var superUpdateCommand:UpdateCommand = superEntity.updateCommand;
-            setFieldParams(superUpdateCommand, obj, superEntity);
-            if (!superEntity.hasCompositeKey())
-            {
-                var pk:PrimaryIdentity = superEntity.pk;
-                superUpdateCommand.setParam(pk.property, obj[pk.property]);
-            }
-            setManyToOneAssociationParams(superUpdateCommand, obj, superEntity);
-            setUpdateTimestampParams(superUpdateCommand);
-            q.addCommand(superUpdateCommand);
-        }
-
-        private function saveOneToManyAssociations(obj:Object, entity:Entity, executor:NonBlockingExecutor):void
-        {
-            var foreignKeys:Array;
-            if (entity.hasCompositeKey())
-            {
-                foreignKeys = getForeignKeys(obj, entity);
-            }
             for each (var a:OneToManyAssociation in entity.oneToManyAssociations)
             {
-                var value:Object = obj[a.property];
+                if (!entity.hasCompositeKey())
+                {
+                    idMap = getIdentityMap(a.fkProperty, obj[entity.pk.property]);
+                }
+                var value:IList = obj[a.property];
                 if (value && !a.inverse && (!a.lazy || !(value is LazyList) || LazyList(value).loaded) && isCascadeSave(a))
                 {
-                    if (!entity.hasCompositeKey())
-                    {
-                        foreignKeys = [{ property: a.fkProperty, id: obj[entity.pk.property] }];
-                    }
-                    for (var i:int = 0; i < value.length; i++)
-                    {
-                        if (a.indexed)
-                        {
-                            saveItem(value.getItemAt(i), executor.branchBlocking(), foreignKeys, null, { property: a.indexProperty, value: i });
-                        }
-                        else
-                        {
-                            saveItem(value.getItemAt(i), executor.branchBlocking(), foreignKeys);
-                        }
-                    }
-                }
-            }
-        }
-
-        private function saveManyToManyAssociation(obj:Object, a:ManyToManyAssociation, q:BlockingExecutor):void
-        {
-            var value:Object = obj[a.property];
-            if (value && (!a.lazy || !(value is LazyList) || LazyList(value).loaded))
-            {
-                var foreignKeys:Array = getForeignKeys(obj, a.ownerEntity);
-
-                var selectIndicesCommand:SelectManyToManyIndicesCommand = a.selectIndicesCommand;
-                q.addFunction(function(data:Object):void
-                {
-                    setFkParams(selectIndicesCommand, obj, a.ownerEntity);
-                });
-                q.addCommand(selectIndicesCommand);
-                q.addFunction(function(data:Object):void
-                {
-                    var key:Key;
-                    var preIndices:Array = [];
-                    for each(var row:Object in data)
-                    {
-                        var index:Object = new Object();
-                        for each(key in a.associatedEntity.keys)
-                        {
-                            index[key.fkProperty] = row[key.fkColumn];
-                        }
-                        preIndices.push(index);
-                    }
-
-                    var idx:Object;
                     for (var i:int = 0; i < value.length; i++)
                     {
                         var item:Object = value.getItemAt(i);
-                        var idm:Object = new Object();
-                        for each(key in a.associatedEntity.keys)
+                        var q:BlockingExecutor = executor.branchBlocking();
+                        var itemEntity:Entity = getEntityForObject(item, q);
+                        var associatedEntity:Entity = a.getAssociatedEntity(itemEntity);
+                        if (associatedEntity)
                         {
-                            idm[key.fkProperty] = key.getIdValue(item);
+                            var opt:Object = {
+                                a               : a,
+                                associatedEntity: associatedEntity,
+                                hasCompositeKey : entity.hasCompositeKey(),
+                                idMap           : idMap
+                            };
+                            if (a.indexed)
+                                opt.indexValue = i;
+
+                            saveItem(item, q, opt);
                         }
+                        else
+                        {
+                            throw new Error("Attempting to save a collection " +
+                                            "item of a type not specified in " +
+                                            "the one-to-many association. ");
+                        }
+                    }
+                }
+            }
+        }
+
+        private function saveManyToManyAssociation(obj:Object, update:Boolean, a:ManyToManyAssociation, idMap:Object, q:BlockingExecutor):void
+        {
+            var value:IList = obj[a.property];
+            if (value && (!a.lazy || !(value is LazyList) || LazyList(value).loaded))
+            {
+                var selectExistingCmd:SelectManyToManyKeysCommand = a.selectManyToManyKeysCmd;
+                var hasCompositeKey:Boolean = a.ownerEntity.hasCompositeKey();
+                if (hasCompositeKey || update)
+                {
+                    setIdentMapParams(selectExistingCmd, idMap);
+                }
+                else
+                {
+                    q.addFunction(function(data:Object):void
+                    {
+                        idMap[a.ownerEntity.fkProperty] = q.parent.parent.id;
+                        setIdentMapParams(selectExistingCmd, idMap);
+                    });
+                }
+                q.add(selectExistingCmd, function(data:Object):void
+                {
+                    var existing:Array = [];
+                    for each(var row:Object in data)
+                    {
+                        existing.push(getIdentityMapFromAssociation(row, a.associatedEntity));
+                    }
+
+                    var map:Object;
+                    for (var i:int = 0; i < value.length; i++)
+                    {
+                        var item:Object = value.getItemAt(i);
+                        var itemIdMap:Object = getIdentityMapFromInstance(item, a.associatedEntity);
 
                         var isLinked:Boolean = false;
                         var k:int = 0;
-
-                        for each(idx in preIndices)
+                        for each(map in existing)
                         {
                             isLinked = true;
-                            for each(key in a.associatedEntity.keys)
+                            for each(var identity:Identity in a.associatedEntity.identities)
                             {
-                                if (idm[key.fkProperty] != idx[key.fkProperty])
+                                if (itemIdMap[identity.fkProperty] != map[identity.fkProperty])
                                 {
                                     isLinked = true;
                                     break;
@@ -720,60 +891,60 @@ package nz.co.codec.flexorm
                             k++;
                         }
 
-                        if (isLinked) // then no need to update associationTable
+                        if (isLinked) // then no need to create the associationTable
                         {
                             if (isCascadeSave(a))
                             {
                                 if (a.indexed)
                                 {
-                                    var updateCommand:UpdateCommand = a.updateCommand.clone();
-                                    setFkParams(updateCommand, obj, a.ownerEntity);
-                                    setFkParams(updateCommand, item, a.associatedEntity);
-                                    updateCommand.setParam(a.indexProperty, i);
-                                    q.addCommand(updateCommand);
+                                    var updateCmd:UpdateCommand = a.updateCommand.clone();
+                                    setIdentMapParams(updateCmd, idMap);
+                                    setIdentMapParams(updateCmd, itemIdMap);
+                                    updateCmd.setParam(a.indexProperty, i);
+                                    q.add(updateCmd);
                                 }
-                                saveItem(item, q);
+                                saveItem(item, q, {});
                             }
-                            preIndices.splice(idx, 1);
+                            existing.splice(k, 1);
                         }
                         else
                         {
-                            var insertCommand:InsertCommand = a.insertCommand.clone();
+                            var insertCmd:InsertCommand = a.insertCommand.clone();
                             if (isCascadeSave(a))
                             {
-                                // insert link in associationTable
+                                // insert link in associationTable after
+                                // inserting the associated entity instance
+                                var opt:Object = {
+                                    a               : a,
+                                    associatedEntity: a.associatedEntity,
+                                    hasCompositeKey : hasCompositeKey,
+                                    idMap           : idMap,
+                                    mtmInsertCmd    : insertCmd
+                                };
                                 if (a.indexed)
-                                {
-                                    saveItem(item, q, foreignKeys, insertCommand, { property: a.indexProperty, value: i });
-                                }
-                                else
-                                {
-                                    saveItem(item, q, foreignKeys, insertCommand);
-                                }
+                                    opt.indexValue = i;
+
+                                saveItem(item, q, opt);
                             }
                             else // just create the link instead
                             {
-                                setFkParams(insertCommand, obj, a.ownerEntity);
-                                setFkParams(insertCommand, item, a.associatedEntity);
+                                setIdentMapParams(insertCmd, idMap);
+                                setIdentMapParams(insertCmd, itemIdMap);
                                 if (a.indexed)
-                                {
-                                    insertCommand.setParam(a.indexProperty, i);
-                                }
-                                q.addCommand(insertCommand);
+                                    insertCmd.setParam(a.indexProperty, i);
+
+                                q.add(insertCmd);
                             }
                         }
                     }
                     // for each pre index left
-                    for each(idx in preIndices)
+                    for each(map in existing)
                     {
                         // delete link from associationTable
-                        var deleteCommand:DeleteCommand = a.deleteCommand;
-                        for each(key in a.associatedEntity.keys)
-                        {
-                            deleteCommand.setParam(key.fkProperty, idx[key.fkProperty]);
-                        }
-                        setFkParams(deleteCommand, obj, a.ownerEntity);
-                        q.addCommand(deleteCommand);
+                        var deleteCmd:DeleteCommand = a.deleteCommand;
+                        setIdentMapParams(deleteCmd, idMap);
+                        setIdentMapParams(deleteCmd, map);
+                        q.add(deleteCmd);
                     }
                 });
             }
@@ -781,115 +952,126 @@ package nz.co.codec.flexorm
 
         public function markForDeletion(obj:Object, responder:IResponder):void
         {
-            var q:BlockingExecutor = new BlockingExecutor();
-            q.setResponder(responder);
-            var c:Class = getClass(obj);
-            var cn:String = getClassName(c);
-            var entity:Entity = map[cn];
-            if (entity == null || !entity.initialisationComplete)
-            {
-                entity = introspector.loadMetadata(c, null, q);
-            }
-            var markForDeletionCommand:MarkForDeletionCommand = entity.markForDeletionCommand;
-            setKeyParams(markForDeletionCommand, obj, entity);
-            q.addCommand(markForDeletionCommand);
+            var q:BlockingExecutor = createBlockingExecutor(responder);
+            var entity:Entity = getEntityForObject(obj, q);
+            var markForDeletionCmd:MarkForDeletionCommand = entity.markForDeletionCmd;
+            setIdentityParams(markForDeletionCmd, obj, entity);
+            q.add(markForDeletionCmd);
             q.execute();
         }
 
-        public function remove(obj:Object, responder:IResponder):void
+        public function removeItem(cls:Class, id:int, responder:IResponder):void
         {
-            var q:BlockingExecutor = new BlockingExecutor();
-            q.setResponder(responder);
+            loadItem(cls, id, new Responder(
 
-            // if not already part of a programmer-defined transaction, then
-            // start one to group all cascade 'delete' operations
-            if (!inTransaction)
-            {
-                q.addCommand(new BeginCommand(sqlConnection));
-                removeObj(obj, q);
-                q.addCommand(new CommitCommand(sqlConnection));
-            }
-            else
-            {
-                removeObj(obj, q);
-            }
-            q.execute();
-        }
-
-        public function removeItem(c:Class, id:int, responder:IResponder):void
-        {
-            load(c, id, new Responder(
-                function(event:EntityEvent):void
+                function(ev:EntityEvent):void
                 {
-                    remove(event.data, responder);
+                    remove(ev.data, responder);
                 },
-                function(error:EntityError):void
+
+                function(e:EntityErrorEvent):void
                 {
-                    trace(error);
-                    responder.fault(error);
+                    trace(e);
+                    responder.fault(e);
                 }
             ));
         }
 
-        private function removeObj(obj:Object, q:BlockingExecutor):void
+        public function remove(obj:Object, responder:IResponder):void
         {
-            var c:Class = getClass(obj);
-            var cn:String = getClassName(c);
-            var entity:Entity = map[cn];
-            if (entity == null || !entity.initialisationComplete)
-            {
-                entity = introspector.loadMetadata(c, null, q);
-            }
-            removeOneToManyAssociations(obj, entity, q.branchNonBlocking());
+            var q:BlockingExecutor = createBlockingExecutor(responder);
 
-            // Doesn't make sense to support cascade delete on many-to-many associations
-
-            var deleteCommand:DeleteCommand = entity.deleteCommand;
-            setKeyParams(deleteCommand, obj, entity);
-            q.addCommand(deleteCommand);
-            if (!entity.hasCompositeKey())
+            // if not already part of a programmer-defined transaction,
+            // then start one to group all cascade 'delete' operations
+            if (!inTransaction)
             {
-                var id:int = obj[entity.pk.property];
-                removeSuperEntity(id, entity.superEntity, q);
+                q.add(new BeginCommand(sqlConnection));
+                removeObject(obj, q);
+                q.add(new CommitCommand(sqlConnection));
             }
-            removeManyToOneAssociations(obj, entity, q.branchNonBlocking());
+            else
+            {
+                removeObject(obj, q);
+            }
+            q.execute();
+        }
+
+        private function removeObject(obj:Object, q:BlockingExecutor):void
+        {
+            removeEntity(getEntityForObject(obj, q), obj, q);
+        }
+
+        private function removeEntity(entity:Entity, obj:Object, q:BlockingExecutor):void
+        {
+            if (entity == null)
+                return;
+
+            removeOneToManyAssociations(entity, obj, q.branchNonBlocking());
+
+            // Doesn't make sense to support 'cascade delete'
+            // on many-to-many associations
+
+            var deleteCmd:DeleteCommand = entity.deleteCommand;
+            setIdentityParams(deleteCmd, obj, entity);
+            q.add(deleteCmd);
+            removeEntity(entity.superEntity, obj, q);
+            removeManyToOneAssociations(entity, obj, q.branchNonBlocking());
         }
 
         // TODO I had changed this for performance, but I should revert back
-        // to iterating through and removeObj to remove the object graph to
-        // effect any cascade delete on associations of the removed object.
-        private function removeOneToManyAssociations(obj:Object, entity:Entity, executor:NonBlockingExecutor):void
+        // to iterating through and removeObject to remove the object graph
+        // to effect any cascade delete on associations of the removed object.
+        private function removeOneToManyAssociations(entity:Entity, obj:Object, executor:NonBlockingExecutor):void
         {
             for each(var a:OneToManyAssociation in entity.oneToManyAssociations)
             {
                 if (isCascadeDelete(a))
                 {
-                    var deleteCommand:DeleteCommand = a.deleteCommand;
-                    setKeyParams(deleteCommand, obj, entity);
-                    executor.addCommand(deleteCommand);
+                    if (a.multiTyped)
+                    {
+                        for each(var type:AssociatedType in a.associatedTypes)
+                        {
+                            removeEntity(type.associatedEntity, obj, executor.branchBlocking());
+                        }
+                    }
+                    else
+                    {
+                        var deleteCmd:DeleteCommand = a.deleteCommand;
+                        if (entity.hasCompositeKey())
+                        {
+                            setIdentityParams(deleteCmd, obj, entity);
+                        }
+                        else
+                        {
+                            deleteCmd.setParam(a.fkProperty, obj[entity.pk.property]);
+                        }
+                        executor.add(deleteCmd);
+                    }
                 }
-                // TODO else set the FK to 0 ?
+                else // set the FK to 0
+                {
+                    var updateCmd:UpdateCommand = a.updateFKAfterDeleteCmd;
+                    if (entity.hasCompositeKey())
+                    {
+                        setIdentityParams(updateCmd, obj, entity);
+                    }
+                    else
+                    {
+                        updateCmd.setParam(a.fkProperty, obj[entity.pk.property]);
+                    }
+                    executor.add(updateCmd);
+                }
             }
         }
 
-        private function removeSuperEntity(id:int, superEntity:Entity, q:BlockingExecutor):void
-        {
-            if (superEntity == null)
-                return;
-
-            var deleteCommand:DeleteCommand = superEntity.deleteCommand;
-            deleteCommand.setParam(superEntity.pk.property, id);
-            q.addCommand(deleteCommand);
-        }
-
-        private function removeManyToOneAssociations(obj:Object, entity:Entity, executor:NonBlockingExecutor):void
+        private function removeManyToOneAssociations(entity:Entity, obj:Object, executor:NonBlockingExecutor):void
         {
             for each(var a:Association in entity.manyToOneAssociations)
             {
                 var value:Object = obj[a.property];
                 if (value && isCascadeDelete(a))
                 {
-                    removeObj(value, executor.branchBlocking());
+                    removeObject(value, executor.branchBlocking());
                 }
             }
         }
@@ -909,7 +1091,7 @@ package nz.co.codec.flexorm
             if (row == null)
                 return null;
 
-            var value:Object = getCachedValue(entity, getKeyMap(row, entity));
+            var value:Object = getCachedValue(entity, getIdentityMapFromRow(row, entity));
             if (value)
                 return value;
 
@@ -918,90 +1100,101 @@ package nz.co.codec.flexorm
             {
                 instance[f.property] = row[f.column];
             }
-
-            if (!entity.hasCompositeKey())
-            {
-                var id:int = row[entity.pk.column];
-                setSuperProperties(instance, id, entity.superEntity, q);
-            }
-
+            loadSuperProperties(instance, row, entity, q);
             var executor:NonBlockingExecutor = q.branchNonBlocking();
-            for each(var mto:Association in entity.manyToOneAssociations)
+            for each(var a:Association in entity.manyToOneAssociations)
             {
-                setManyToOneAssociation(instance, row, mto, executor.branchBlocking());
+                setManyToOneAssociation(instance, row, a, executor.branchBlocking());
             }
 
-            var otm:OneToManyAssociation;
-            var mtm:ManyToManyAssociation;
-
-            // must be after primary key on instance has been set
-            // or composite keys have been loaded
+            // Must be after keys on instance has been loaded, which includes:
+            // - loadManyToOneAssociation to load composite keys, and
+            // - loadSuperProperties to load inherited keys.
             if (entity.hasCompositeKey())
             {
+                // then must be after many-to-one associations have been loaded
+                // to set composite keys
                 q.addFunction(function(data:Object):void
                 {
-                    setCachedValue(instance, entity);
-
-                    var exec:NonBlockingExecutor = q.branchNonBlocking();
-                    for each(otm in entity.oneToManyAssociations)
-                    {
-                        setOneToManyAssociation(instance, row, otm, entity, exec.branchBlocking());
-                    }
-                    for each(mtm in entity.manyToManyAssociations)
-                    {
-                        setManyToManyAssociation(instance, row, mtm, entity, exec.branchBlocking());
-                    }
-                }, "set cached value and load list associations");
+                    setListAssociations(instance, row, entity, q.branchNonBlocking());
+                });
             }
             else
             {
-                setCachedValue(instance, entity);
-
-                for each(otm in entity.oneToManyAssociations)
-                {
-                    setOneToManyAssociation(instance, row, otm, entity, executor.branchBlocking());
-                }
-                for each(mtm in entity.manyToManyAssociations)
-                {
-                    setManyToManyAssociation(instance, row, mtm, entity, executor.branchBlocking());
-                }
+                setListAssociations(instance, row, entity, executor);
             }
 
             return instance;
         }
 
-        private function setSuperProperties(
+        private function setListAssociations(instance:Object, row:Object, entity:Entity, executor:NonBlockingExecutor):void
+        {
+            setCachedValue(instance, entity);
+
+            for each(var otm:OneToManyAssociation in entity.oneToManyAssociations)
+            {
+                setOneToManyAssociation(instance, row, otm, entity, executor.branchBlocking());
+            }
+            for each(var mtm:ManyToManyAssociation in entity.manyToManyAssociations)
+            {
+                setManyToManyAssociation(instance, row, mtm, entity, executor.branchBlocking());
+            }
+        }
+
+        private function loadSuperProperties(
             instance:Object,
-            id:int,
-            superEntity:Entity,
+            row:Object,
+            entity:Entity,
             q:BlockingExecutor):void
         {
+            var superEntity:Entity = entity.superEntity;
             if (superEntity == null)
                 return;
 
-            var selectCommand:SelectCommand = superEntity.selectCommand;
-            selectCommand.setParam(superEntity.pk.property, id);
-            q.addCommand(selectCommand);
-            q.addFunction(function(data:Object):void
+            var idMap:Object = entity.hasCompositeKey() ?
+                getIdentityMapFromRow(row, superEntity) :
+                getIdentityMap(superEntity.fkProperty, row[entity.pk.column]);
+
+            var superInstance:Object = getCachedValue(superEntity, idMap);
+            if (superInstance == null)
             {
-                var superInstance:Object = typeObject(data[0], superEntity, q);
-                for each(var f:Field in superEntity.fields)
+                loadEntity(superEntity, idMap, q.branchBlocking());
+//                var branch:BlockingExecutor = q.branchBlocking();
+//                loadEntity(superEntity, idMap, branch);
+                q.addFunction(function(data:Object):void
                 {
+                    setSuperProperties(instance, data.data, superEntity);
+//                    setSuperProperties(instance, branch.data, superEntity);
+                });
+            }
+            else
+            {
+                setSuperProperties(instance, superInstance, superEntity);
+            }
+        }
+
+        private function setSuperProperties(instance:Object, superInstance:Object, superEntity:Entity):void
+        {
+            for each(var f:Field in superEntity.fields)
+            {
+                // commented out to populate a sub instance's inherited ID field
+//                if (superEntity.hasCompositeKey() || (f.property != superEntity.pk.property))
+//                {
                     instance[f.property] = superInstance[f.property];
-                }
-                for each(var mto:Association in superEntity.manyToOneAssociations)
-                {
-                    instance[mto.property] = superInstance[mto.property];
-                }
-                for each(var otm:Association in superEntity.oneToManyAssociations)
-                {
-                    instance[otm.property] = superInstance[otm.property];
-                }
-                for each(var mtm:Association in superEntity.manyToManyAssociations)
-                {
-                    instance[mtm.property] = superInstance[mtm.property];
-                }
-            });
+//                }
+            }
+            for each(var mto:Association in superEntity.manyToOneAssociations)
+            {
+                instance[mto.property] = superInstance[mto.property];
+            }
+            for each(var otm:Association in superEntity.oneToManyAssociations)
+            {
+                instance[otm.property] = superInstance[otm.property];
+            }
+            for each(var mtm:Association in superEntity.manyToManyAssociations)
+            {
+                instance[mtm.property] = superInstance[mtm.property];
+            }
         }
 
         private function setManyToOneAssociation(
@@ -1010,26 +1203,41 @@ package nz.co.codec.flexorm
             a:Association,
             q:BlockingExecutor):void
         {
-            var value:Object = getCachedValue(a.associatedEntity, getFkMap(row, a.associatedEntity));
+            var associatedEntity:Entity = a.associatedEntity;
+            var value:Object = null;
+            if (!associatedEntity.isSuperEntity)
+            {
+                value = getCachedAssociationValue(a, row);
+            }
             if (value)
             {
                 instance[a.property] = value;
             }
             else
             {
-                var keyMap:Object = getKeyMap(row, a.associatedEntity);
-                if (keyMap)
+                var idMap:Object = null;
+                if (associatedEntity.hasCompositeKey())
                 {
-                    var selectCommand:SelectCommand = a.associatedEntity.selectCommand;
-                    setKeyMapParams(selectCommand, keyMap);
-                    q.addCommand(selectCommand, "select " + a.associatedEntity.name);
+                    idMap = getIdentityMapFromAssociation(row, associatedEntity);
+                }
+                else
+                {
+                    var id:int = row[a.fkColumn];
+                    if (id > 0)
+                    {
+                        idMap = getIdentityMap(associatedEntity.fkProperty, id);
+                    }
+                }
+                if (idMap)
+                {
+                    loadComplexEntity(associatedEntity, idMap, q.branchBlocking());
+//                    var branch:BlockingExecutor = q.branchBlocking();
+//                    loadComplexEntity(associatedEntity, idMap, branch);
                     q.addFunction(function(data:Object):void
                     {
-                        if (data)
-                        {
-                            instance[a.property] = typeObject(data[0], a.associatedEntity, q);
-                        }
-                    }, "set instance");
+                        instance[a.property] = data.data;
+//                        instance[a.property] = branch.data;
+                    });
                 }
             }
         }
@@ -1041,22 +1249,30 @@ package nz.co.codec.flexorm
             entity:Entity,
             q:BlockingExecutor):void
         {
-            // Lazy Loading not supported using the Asynchronous API
+            var idMap:Object = entity.hasCompositeKey() ?
+                getIdentityMapFromRow(row, entity) :
+                getIdentityMap(a.fkProperty, row[entity.pk.column]);
+            // Lazy Loading not supported using the Asynchronous API yet
 //			if (a.lazy)
 //			{
-//				instance[a.property] = new LazyList(this, a, id);
+//				var lazyList:LazyList = new LazyList(this, a, idMap);
+//				var value:ArrayCollection = new ArrayCollection();
+//				value.list = lazyList;
+//				instance[a.property] = value;
+//				lazyList.initialise();
 //			}
 //			else
 //			{
-                var selectCommand:SelectCommand = a.selectCommand;
-                for each(var key:Key in entity.keys)
-                {
-                    selectCommand.setParam(key.fkProperty, row[key.column]);
-                }
-                q.addCommand(selectCommand);
+
+                // TODO optimise if not multiple types
+
+                loadOneToManyAssociationInternal(a, idMap, q.branchBlocking());
+//                var branch:BlockingExecutor = q.branchBlocking();
+//                loadOneToManyAssociationInternal(a, idMap, branch);
                 q.addFunction(function(data:Object):void
                 {
-                    instance[a.property] = typeArray(data as Array, a.associatedEntity, q);
+                    instance[a.property] = data.data; // TODO check
+//                    instance[a.property] = branch.data;
                 });
 //			}
         }
@@ -1068,20 +1284,20 @@ package nz.co.codec.flexorm
             entity:Entity,
             q:BlockingExecutor):void
         {
-            // Lazy Loading not supported using the Asynchronous API
+            // Lazy Loading not supported using the Asynchronous API yet
 //			if (a.lazy)
 //			{
-//				instance[a.property] = new LazyList(this, a, id);
+//				var lazyList:LazyList = new LazyList(this, a, getIdentityMapFromRow(row, entity));
+//				var value:ArrayCollection = new ArrayCollection();
+//				value.list = lazyList;
+//				instance[a.property] = value;
+//				lazyList.initialise();
 //			}
 //			else
 //			{
-                var selectCommand:SelectManyToManyCommand = a.selectCommand;
-                for each(var key:Key in entity.keys)
-                {
-                    selectCommand.setParam(key.fkProperty, row[key.column]);
-                }
-                q.addCommand(selectCommand);
-                q.addFunction(function(data:Object):void
+                var selectCmd:SelectManyToManyCommand = a.selectCommand;
+                setIdentMapParams(selectCmd, getIdentityMapFromRow(row, entity));
+                q.add(selectCmd, function(data:Object):void
                 {
                     instance[a.property] = typeArray(data as Array, a.associatedEntity, q);
                 });

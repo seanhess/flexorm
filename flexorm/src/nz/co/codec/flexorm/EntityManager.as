@@ -3,6 +3,8 @@ package nz.co.codec.flexorm
     import flash.data.SQLConnection;
     import flash.errors.SQLError;
     import flash.filesystem.File;
+    import flash.utils.getDefinitionByName;
+    import flash.utils.getQualifiedClassName;
 
     import mx.collections.ArrayCollection;
     import mx.collections.IList;
@@ -13,23 +15,25 @@ package nz.co.codec.flexorm
     import nz.co.codec.flexorm.command.MarkForDeletionCommand;
     import nz.co.codec.flexorm.command.SelectCommand;
     import nz.co.codec.flexorm.command.SelectManyToManyCommand;
-    import nz.co.codec.flexorm.command.SelectManyToManyIndicesCommand;
+    import nz.co.codec.flexorm.command.SelectManyToManyKeysCommand;
+    import nz.co.codec.flexorm.command.SelectSubTypeCommand;
     import nz.co.codec.flexorm.command.UpdateCommand;
+    import nz.co.codec.flexorm.criteria.Criteria;
+    import nz.co.codec.flexorm.metamodel.AssociatedType;
     import nz.co.codec.flexorm.metamodel.Association;
-    import nz.co.codec.flexorm.metamodel.CompositeIdentity;
+    import nz.co.codec.flexorm.metamodel.CompositeKey;
     import nz.co.codec.flexorm.metamodel.Entity;
     import nz.co.codec.flexorm.metamodel.Field;
-    import nz.co.codec.flexorm.metamodel.Key;
+    import nz.co.codec.flexorm.metamodel.Identity;
     import nz.co.codec.flexorm.metamodel.ManyToManyAssociation;
     import nz.co.codec.flexorm.metamodel.OneToManyAssociation;
-    import nz.co.codec.flexorm.metamodel.PrimaryIdentity;
     import nz.co.codec.flexorm.util.PersistentEntity;
 
     public class EntityManager extends EntityManagerBase implements IEntityManager
     {
         private static var _instance:EntityManager;
 
-        private static var localInstantiation:Boolean = false;
+        private static var localInstantiation:Boolean;
 
         public static function get instance():EntityManager
         {
@@ -42,19 +46,19 @@ package nz.co.codec.flexorm
             return _instance;
         }
 
-        private var inTransaction:Boolean = false;
-
         /**
-         * EntityManager is a singleton.
+         * EntityManager is a Singleton.
          */
         public function EntityManager()
         {
             super();
             if (!localInstantiation)
             {
-                throw new Error("EntityManager is a singleton. Use EntityManager.instance");
+                throw new Error("EntityManager is a singleton. Use EntityManager.instance ");
             }
         }
+
+        private var inTransaction:Boolean;
 
         /**
          * Opens a synchronous connection to the database.
@@ -62,9 +66,8 @@ package nz.co.codec.flexorm
         public function openSyncConnection(dbFilename:String):void
         {
             var dbFile:File = File.applicationStorageDirectory.resolvePath(dbFilename);
-            _sqlConnection = new SQLConnection();
-            _sqlConnection.open(dbFile);
-            introspector = null;
+            sqlConnection = new SQLConnection();
+            sqlConnection.open(dbFile);
         }
 
         /**
@@ -73,53 +76,11 @@ package nz.co.codec.flexorm
          */
         override public function get sqlConnection():SQLConnection
         {
-            if (_sqlConnection == null)
+            if (super.sqlConnection == null)
             {
                 openSyncConnection("default.db");
             }
-            return _sqlConnection;
-        }
-
-        /**
-         * Returns metadata for a persistent object. If not already defined,
-         * then uses the EntityIntrospector to load metadata using the
-         * persistent object's annotations.
-         */
-        private function getEntity(cls:Class, name:String=null):Entity
-        {
-            var c:Class = (cls is PersistentEntity)? cls.myClass : cls;
-            var cn:String = getClassName(c);
-            var entity:Entity = map[cn];
-            if (entity == null || !entity.initialisationComplete)
-            {
-                entity = introspector.loadMetadata(c, name);
-            }
-            return entity;
-        }
-
-        /**
-         * Helper method added by WDRogers, 2008-05-16
-         */
-        private function getEntityForObject(obj:Object, name:String=null):Entity
-        {
-            var c:Class = getClass(obj);
-            var cn:String = getClassName(c);
-            if (cn == "Object")
-            {
-                if (name == null)
-                    throw Error("Object name must be specified if attempting to save an untyped object.");
-
-                var entity:Entity = map[name];
-                if (entity == null || !entity.initialisationComplete)
-                {
-                    entity = introspector.loadMetadataForDynamicObject(obj, name);
-                }
-                return entity;
-            }
-            else
-            {
-                return getEntity(c, name);
-            }
+            return super.sqlConnection;
         }
 
         /**
@@ -151,17 +112,16 @@ package nz.co.codec.flexorm
         }
 
         /**
-         * Rollback a transaction in the event of a database error
-         * and print debug information to the console if set.
+         * Rollback a transaction in the event of a database error and
+         * print debug information to the console if set.
          */
         private function handleSQLError(error:SQLError):void
         {
-            if (debugLevel > 0)
-                trace(error);
+            trace(error);
 
-            // check if transaction is still open, since a foreign key
+            // Check if a transaction is still open since a foreign key
             // constraint trigger will force a rollback, which closes
-            // the transaction
+            // the transaction.
             if (sqlConnection.inTransaction)
             {
                 sqlConnection.rollback();
@@ -170,120 +130,211 @@ package nz.co.codec.flexorm
         }
 
         /**
-         * Return a list of all persistent objects of the requested type
-         * from the database.
+         * Return a list of all objects of the requested type from the database.
          */
-        public function findAll(c:Class):ArrayCollection
+        public function findAll(cls:Class):ArrayCollection
         {
-            var entity:Entity = getEntity(c);
-            var command:FindAllCommand = entity.findAllCommand;
-            command.execute();
-            var result:ArrayCollection = typeArray(command.result, entity);
+            var entity:Entity = getEntity(cls);
+            var cmd:FindAllCommand = entity.findAllCommand;
+            cmd.execute();
+            var result:ArrayCollection = typeArray(cmd.result, entity);
             clearCache();
             return result;
         }
 
-        private function loadItems(selectCommand:SelectCommand, keyMap:Object, entity:Entity):ArrayCollection
-        {
-            setKeyMapParams(selectCommand, keyMap);
-            selectCommand.execute();
-            return typeArray(selectCommand.result, entity);
-        }
-
         /**
          * Return a list of the associated objects in a one-to-many association
-         * using a map of the foreign key IDs.
+         * using a map of the key values (fkProperty : value).
          */
-        public function loadOneToManyAssociation(a:OneToManyAssociation, keyMap:Object):ArrayCollection
+        public function loadOneToManyAssociation(a:OneToManyAssociation, idMap:Object):ArrayCollection
         {
-            var result:ArrayCollection = loadItems(a.selectCommand, keyMap, a.associatedEntity);
+            var result:ArrayCollection = loadOneToManyAssociationInternal(a, idMap);
             clearCache();
+            return result;
+        }
+
+        private function loadOneToManyAssociationInternal(a:OneToManyAssociation, idMap:Object):ArrayCollection
+        {
+            var items:Array = [];
+            for each(var type:AssociatedType in a.associatedTypes)
+            {
+                var associatedEntity:Entity = type.associatedEntity;
+                var selectCmd:SelectCommand = type.selectCommand;
+                setIdentMapParams(selectCmd, idMap);
+                selectCmd.execute();
+
+                var row:Object;
+                if (associatedEntity.isSuperEntity)
+                {
+                    var subTypes:Object = {};
+                    for each(row in selectCmd.result)
+                    {
+                        subTypes[row.entity_type] = null;
+                    }
+                    for (var subType:String in subTypes)
+                    {
+                        var subClass:Class = getDefinitionByName(subType) as Class;
+                        var subEntity:Entity = getEntity(subClass);
+                        var selectSubTypeCmd:SelectSubTypeCommand = subEntity.selectSubTypeCmd.clone();
+                        selectSubTypeCmd.parentTable = associatedEntity.table;
+                        var ownerEntity:Entity = a.ownerEntity;
+                        if (ownerEntity.hasCompositeKey())
+                        {
+                            for each(var identity:Identity in ownerEntity.identities)
+                            {
+                                selectSubTypeCmd.addFilter(identity.fkColumn, identity.fkProperty);
+                                selectSubTypeCmd.setParam(identity.fkProperty, idMap[identity.fkProperty]);
+                            }
+                        }
+                        else
+                        {
+                            selectSubTypeCmd.addFilter(a.fkColumn, a.fkProperty);
+                            selectSubTypeCmd.setParam(a.fkProperty, idMap[a.fkProperty]);
+                        }
+                        if (a.indexed)
+                            selectSubTypeCmd.indexColumn = a.indexColumn;
+
+                        selectSubTypeCmd.execute();
+                        for each(row in selectSubTypeCmd.result)
+                        {
+                            items.push(
+                            {
+                                associatedEntity: subEntity,
+                                index           : row[a.indexColumn],
+                                row             : row
+                            });
+                        }
+                    }
+                }
+                else
+                {
+                    for each(row in selectCmd.result)
+                    {
+                        items.push(
+                        {
+                            associatedEntity: associatedEntity,
+                            index           : row[a.indexColumn],
+                            row             : row
+                        });
+                    }
+                }
+            }
+            if (a.indexed)
+                items.sortOn("index");
+
+            var result:ArrayCollection = new ArrayCollection();
+            for each(var it:Object in items)
+            {
+                result.addItem(typeObject(it.row, it.associatedEntity));
+            }
             return result;
         }
 
         /**
          * Return a list of the associated objects in a many-to-many association
-         * using a map of the foreign key IDs.
+         * using a map of the key values (fkProperty : value).
          */
-        public function loadManyToManyAssociation(a:ManyToManyAssociation, keyMap:Object):ArrayCollection
+        public function loadManyToManyAssociation(a:ManyToManyAssociation, idMap:Object):ArrayCollection
         {
-            var selectCommand:SelectManyToManyCommand = a.selectCommand;
-            setKeyMapParams(selectCommand, keyMap);
-            selectCommand.execute();
-            var result:ArrayCollection = typeArray(selectCommand.result, a.associatedEntity);
-            clearCache();
-            return result;
+            var selectCmd:SelectManyToManyCommand = a.selectCommand;
+            setIdentMapParams(selectCmd, idMap);
+            selectCmd.execute();
+            return typeArray(selectCmd.result, a.associatedEntity);
         }
 
         /**
-         * Load a persistent object from the database of the requested type
-         * and given id.
+         * Load an object from the database of the requested type and given id.
          */
-        public function loadItem(c:Class, id:int):Object
-        {
-            var entity:Entity = getEntity(c);
-            if (entity.hasCompositeKey())
-            {
-                throw new Error("Entity '" + entity.className +
-                    "' has a composite key. Use EntityManager.loadItemByCompositeKey instead.");
-            }
-
-            var selectCommand:SelectCommand = entity.selectCommand;
-            selectCommand.setParam(entity.pk.property, id);
-            selectCommand.execute();
-            var result:Object = selectCommand.result? typeObject(selectCommand.result[0], entity) : null;
-            clearCache();
-            return result;
-        }
-
         public function load(cls:Class, id:int):Object
         {
             return loadItem(cls, id);
         }
 
-        public function loadObject(name:String, id:int):Object
+        public function loadItem(cls:Class, id:int):Object
         {
-            var entity:Entity = map[name];
-            if (entity == null)
-                return null;
-
-            var selectCommand:SelectCommand = entity.selectCommand;
-            selectCommand.setParam(entity.pk.property, id);
-            selectCommand.execute();
-            var result:Object = selectCommand.result? typeObject(selectCommand.result[0], entity) : null;
+            var entity:Entity = getEntity(cls);
+            if (entity.hasCompositeKey())
+            {
+                throw new Error("Entity '" + entity.name + "' has a composite key. " +
+                                "Use EntityManager.loadItemByCompositeKey instead. ");
+            }
+            var instance:Object = loadComplexEntity(entity, getIdentityMap(entity.fkProperty, id));
             clearCache();
-            return result;
+            return instance;
+        }
+
+        private function loadComplexEntity(entity:Entity, idMap:Object):Object
+        {
+            var selectCmd:SelectCommand = entity.selectCommand;
+            setIdentMapParams(selectCmd, idMap);
+            selectCmd.execute();
+            var result:Array = selectCmd.result;
+            if (result && result.length > 0)
+            {
+                var row:Object = result[0];
+
+                // Add to cache to avoid reselecting from database
+                var instance:Object = typeObject(row, entity);
+
+                if (entity.isSuperEntity)
+                {
+                    var subType:String = row.entity_type;
+                    if (subType)
+                    {
+                        var subClass:Class = getDefinitionByName(subType) as Class;
+                        var subEntity:Entity = getEntity(subClass);
+                        if (subEntity == null)
+                            throw new Error("Cannot find entity of type " + subType);
+
+                        var map:Object = entity.hasCompositeKey() ?
+                            getIdentityMapFromRow(row, subEntity) :
+                            getIdentityMap(subEntity.fkProperty, idMap[entity.fkProperty]);
+
+                        var value:Object = getCachedValue(subEntity, map);
+                        if (value == null)
+                            value = loadComplexEntity(subEntity, map);
+
+                        instance = value;
+                    }
+                }
+            }
+            return instance;
+        }
+
+        private function loadEntity(entity:Entity, idMap:Object):Object
+        {
+            var selectCmd:SelectCommand = entity.selectCommand;
+            setIdentMapParams(selectCmd, idMap);
+            selectCmd.execute();
+            var result:Array = selectCmd.result;
+            if (result && result.length > 0)
+                return typeObject(result[0], entity);
+            return null;
         }
 
         /**
-         * Added by WDRogers, 2008-05-16 to provide loading of objects that
-         * are most conveniently referenced by a composite business key.
+         * Added by WDRogers, 2008-05-16, to enable loading of objects that are
+         * referenced by a composite business key.
          */
-        public function loadItemByCompositeKey(c:Class, compositeKeys:Array):Object
+        public function loadItemByCompositeKey(cls:Class, keys:Array):Object
         {
-            var entity:Entity = getEntity(c);
+            var entity:Entity = getEntity(cls);
             if (!entity.hasCompositeKey())
             {
-                throw new Error("Entity '" + entity.className +
-                    "' does not have a composite key. Use EntityManager.load instead.");
+                throw new Error("Entity '" + entity.name +
+                    "' does not have a composite key. Use EntityManager.loadItem instead. ");
             }
-
-            var selectCommand:SelectCommand = entity.selectCommand;
-            for each(var obj:Object in compositeKeys)
+            var idMap:Object = {};
+            for each(var obj:Object in keys)
             {
                 var keyEntity:Entity = getEntityForObject(obj);
-                var key:Key;
 
-                // validate if key is a specified identifier for entity
+                // Validate if key is a specified identifier for entity
                 var match:Boolean = false;
-                for each(var identity:CompositeIdentity in entity.identities)
+                for each(var key:CompositeKey in entity.keys)
                 {
-                    if (identity.associatedEntity.className == keyEntity.className)
+                    if (keyEntity.equals(key.associatedEntity))
                     {
-                        for each(key in keyEntity.keys)
-                        {
-                            selectCommand.setParam(key.fkProperty, key.getIdValue(obj));
-                        }
                         match = true;
                         break;
                     }
@@ -293,35 +344,32 @@ package nz.co.codec.flexorm
                 // association instead
                 if (!match)
                 {
-                    trace("Key of type '" + keyEntity.className +
-                          "' not specified as an identifier for '" +
-                          entity.className + "'.");
+                    trace("Key of type '" + keyEntity.name +
+                          "' not specified as an identifier for '" + entity.name + "'. ");
 
                     for each(var a:Association in entity.manyToOneAssociations)
                     {
-                        if (a.associatedEntity.className == keyEntity.className)
+                        if (keyEntity.equals(a.associatedEntity))
                         {
-                            trace("Key type '" + keyEntity.className +
-                                  "' is used in a many-to-one association, so will allow.");
-
-                            for each(key in keyEntity.keys)
-                            {
-                                selectCommand.setParam(key.fkProperty, key.getIdValue(obj));
-                            }
+                            trace("Key type '" + keyEntity.name +
+                                  "' is used in a many-to-one association, so will allow. ");
                             match = true;
                             break;
                         }
                     }
                 }
-                if (!match)
-                    throw new Error("Invalid key of type '" + keyEntity.className + "' specified.");
+                if (match)
+                {
+                    idMap = combineMaps([idMap, getIdentityMapFromInstance(obj, keyEntity)]);
+                }
+                else
+                {
+                    throw new Error("Invalid key of type '" + keyEntity.name + "' specified. ");
+                }
             }
-
-            selectCommand.execute();
-            var result:Array = selectCommand.result;
-            var retval:Object = result? typeObject(result[0], entity) : null;
+            var instance:Object = loadComplexEntity(entity, idMap);
             clearCache();
-            return retval;
+            return instance;
         }
 
         /**
@@ -331,23 +379,46 @@ package nz.co.codec.flexorm
          * just-in-time basis. The save operation and all cascading saves
          * are enclosed in a transaction to ensure the database is left in
          * a consistent state.
+         *
+         * Options:
+         *
+         * Externally set:
+         * - ownerClass:Class
+         *     Must be set if client code specifies an indexValue, to determine
+         *     the class that owns the indexed list
+         * - indexValue:int
+         *     May be set by client code when saving an indexed object directly
+         *
+         * Internally set:
+         * - name:String
+         * - a:Association (OneToMany || ManyToMany)
+         * - associatedEntity:Entity
+         * - idMap:Object
+         * - mtmInsertCmd:InsertCommand
+         * - indexValue:int
          */
-        public function save(obj:Object, name:String=null):int
+        public function save(obj:Object, opt:Object=null):int
         {
-            resetMapForDynamicObjects(name);
+            if (obj == null)
+                return 0;
+
+            if (opt == null)
+                opt = {};
+
+            resetMapForDynamicObjects(opt.name);
             var id:int = 0;
-            // if not already part of a user-defined transaction, then
-            // start one to group all cascade 'save-update' operations
             try {
+                // if not already part of a programmer-defined transaction,
+                // then start one to group all cascade 'save-update' operations
                 if (!inTransaction)
                 {
                     sqlConnection.begin();
-                    id = saveItem(obj, name);
+                    id = saveItem(obj, opt);
                     sqlConnection.commit();
                 }
                 else
                 {
-                    id = saveItem(obj, name);
+                    id = saveItem(obj, opt);
                 }
             }
             catch (e:SQLError)
@@ -361,188 +432,205 @@ package nz.co.codec.flexorm
         {
             if (name)
             {
-                for (var key:String in map)
+                for (var key:String in entityMap)
                 {
-                    var entity:Entity = map[key];
-                    if (entity.root == name)
+                    var entity:Entity = entityMap[key];
+                    if (name == entity.root)
                     {
-                        map[key] = null;
+                        entityMap[key] = null;
                     }
                 }
             }
         }
 
-        private function saveItem(
-            obj:Object,
-            name:String=null,
-            foreignKeys:Array=null,
-            mtmInsertCommand:InsertCommand=null,
-            idx:Object=null):int
+        private function saveItem(obj:Object, opt:Object):int
         {
             if (obj == null)
                 return 0;
 
-            var entity:Entity = getEntityForObject(obj, name);
-
+            var id:int = 0;
+            var entity:Entity = getEntityForObject(obj, opt.name);
             if (entity.hasCompositeKey())
             {
-                var selectCommand:SelectCommand = entity.selectCommand;
-                for each(var identity:CompositeIdentity in entity.identities)
-                {
-                    var keyVal:Object = obj[identity.property];
-                    if (keyVal == null)
-                    {
-                        throw new Error("Object of type '" + entity.className + "' has a null key.");
-                    }
-                }
-                setKeyParams(selectCommand, obj, entity);
-                selectCommand.execute();
-                var result:Array = selectCommand.result;
+                var selectCmd:SelectCommand = entity.selectCommand;
 
-                // TODO Seems a bit inefficient to load an item in order
-                // to determine whether it is new, but this is the only
-                // way I can think of for now without interfering with
-                // the persistent object.
+                // Validate that each composite key is not null.
+                for each(var key:CompositeKey in entity.keys)
+                {
+                    var value:Object = obj[key.property];
+                    if (value == null)
+                        throw new Error("Object of type '" + entity.name + "' has a null key. ");
+                }
+                setIdentityParams(selectCmd, obj, entity);
+                selectCmd.execute();
+                var result:Array = selectCmd.result;
+
+                // TODO Seems a bit inefficient to load an item in order to
+                // determine whether it is new, but this is the only way I
+                // can think of for now without interfering with the object.
                 if (result && result[0])
                 {
-                    updateItem(obj, entity, foreignKeys, mtmInsertCommand, idx);
+                    updateItem(obj, entity, opt);
                 }
                 else
                 {
-                    createItem(obj, entity, foreignKeys, mtmInsertCommand, idx);
+                    createItem(obj, entity, opt);
                 }
             }
             else
             {
-                var id:int = obj[entity.pk.property];
+                id = obj[entity.pk.property];
                 if (id > 0)
                 {
-                    updateItem(obj, entity, foreignKeys, mtmInsertCommand, idx);
+                    updateItem(obj, entity, opt);
                 }
                 else
                 {
-                    createItem(obj, entity, foreignKeys, mtmInsertCommand, idx);
+                    createItem(obj, entity, opt);
                 }
+            }
+            if (!entity.hasCompositeKey() && id == 0)
+            {
+                // Set ID from created item
+                id = obj[entity.pk.property];
+            }
+            return id;
+        }
+
+        private function createItem(obj:Object, entity:Entity, opt:Object):void
+        {
+            saveManyToOneAssociations(obj, entity);
+            var insertCmd:InsertCommand = entity.insertCommand;
+            if (entity.superEntity)
+            {
+                if (!entity.hasCompositeKey())
+                {
+                    opt.subInsertCmd = insertCmd;
+                    opt.entityType = getQualifiedClassName(entity.cls);
+                    opt.fkProperty = entity.fkProperty;
+                }
+                createItem(obj, entity.superEntity, opt);
+            }
+            setFieldParams(insertCmd, obj, entity);
+            setManyToOneAssociationParams(insertCmd, obj, entity);
+            setInsertTimestampParams(insertCmd);
+
+            if (entity.isSuperEntity)
+            {
+                insertCmd.setParam("entityType", opt.entityType);
+            }
+            if (opt.syncSupport && !entity.hasCompositeKey())
+            {
+                insertCmd.setParam("version", 0);
+                insertCmd.setParam("serverId", 0);
+            }
+            insertCmd.setParam("markedForDeletion", false);
+
+            if ((opt.a is OneToManyAssociation) && entity.equals(opt.associatedEntity))
+            {
+                setIdentMapParams(insertCmd, opt.idMap);
+                if (opt.a.indexed)
+                    insertCmd.setParam(opt.a.indexProperty, opt.indexValue);
+            }
+            if (opt.a == null)
+            {
+                for each(var a:OneToManyAssociation in entity.oneToManyInverseAssociations)
+                {
+                    if (a.indexed)
+                    {
+                         // specified by client code
+                        if ((a.ownerEntity.cls == opt.ownerClass) && opt.indexValue)
+                        {
+                            insertCmd.setParam(a.indexProperty, opt.indexValue);
+                        }
+                        else
+                        {
+                            insertCmd.setParam(a.indexProperty, 0);
+                        }
+                    }
+                }
+            }
+            insertCmd.execute();
+
+            if (!entity.hasCompositeKey() && (entity.superEntity == null))
+            {
+                var id:int = insertCmd.lastInsertRowID;
+                var subInsertCmd:InsertCommand = opt.subInsertCmd;
+                if (subInsertCmd)
+                    subInsertCmd.setParam(opt.fkProperty, id);
+
+                obj[entity.pk.property] = id;
+            }
+
+            // The mtmInsertCommand must be executed after the associated entity
+            // has been inserted to maintain referential integrity
+            if ((opt.a is ManyToManyAssociation) && entity.equals(opt.associatedEntity))
+            {
+                var mtmInsertCmd:InsertCommand = opt.mtmInsertCmd;
+                setIdentityParams(mtmInsertCmd, obj, entity);
+                setIdentMapParams(mtmInsertCmd, opt.idMap);
+                if (opt.a.indexed)
+                    mtmInsertCmd.setParam(opt.a.indexProperty, opt.indexValue);
+
+                mtmInsertCmd.execute();
             }
             saveOneToManyAssociations(obj, entity);
             saveManyToManyAssociations(obj, entity);
-            if (entity.hasCompositeKey())
-            {
-                return 0;
-            }
-            else
-            {
-                return obj[entity.pk.property];
-            }
         }
 
-        private function updateItem(
-            obj:Object,
-            entity:Entity,
-            foreignKeys:Array,
-            mtmInsertCommand:InsertCommand,
-            idx:Object):void
+        private function updateItem(obj:Object, entity:Entity, opt:Object):void
         {
-            saveManyToOneAssociations(obj, entity);
-            updateSuperEntity(obj, entity.superEntity);
-            var updateCommand:UpdateCommand = entity.updateCommand;
-            setKeyParams(updateCommand, obj, entity);
-            setFieldParams(updateCommand, obj, entity);
-            setManyToOneAssociationParams(updateCommand, obj, entity);
-            setUpdateTimestampParams(updateCommand);
+            if (obj == null || entity == null)
+                return;
 
-            if (foreignKeys && !mtmInsertCommand)
+            saveManyToOneAssociations(obj, entity);
+            updateItem(obj, entity.superEntity, opt);
+            var updateCmd:UpdateCommand = entity.updateCommand;
+            setIdentityParams(updateCmd, obj, entity);
+            setFieldParams(updateCmd, obj, entity);
+            setManyToOneAssociationParams(updateCmd, obj, entity);
+            setUpdateTimestampParams(updateCmd);
+
+            if ((opt.a is OneToManyAssociation) && entity.equals(opt.associatedEntity))
             {
-                setForeignKeyParams(updateCommand, foreignKeys);
-                if (idx)
-                {
-                    updateCommand.setParam(idx.property, idx.value);
-                }
+                setIdentMapParams(updateCmd, opt.idMap);
+                if (opt.a.indexed)
+                    updateCmd.setParam(opt.a.indexProperty, opt.indexValue);
             }
-            if (idx == null)
+            if (opt.a == null)
             {
                 for each(var a:OneToManyAssociation in entity.oneToManyInverseAssociations)
                 {
                     if (a.indexed)
                     {
-                        updateCommand.setParam(a.indexProperty, 0);
+                         // specified by client code
+                        if ((a.ownerEntity.cls == opt.ownerClass) && opt.indexValue)
+                        {
+                            updateCmd.setParam(a.indexProperty, opt.indexValue);
+                        }
+                        else
+                        {
+                            updateCmd.setParam(a.indexProperty, 0);
+                        }
                     }
                 }
             }
-            updateCommand.execute();
+            updateCmd.execute();
 
-            // The mtmInsertCommand must be executed after the associated entity
-            // has been inserted to maintain relational integrity
-            if (foreignKeys && mtmInsertCommand)
+            // The mtmInsertCmd must be executed after the associated entity has
+            // been inserted to maintain referential integrity.
+            if ((opt.a is ManyToManyAssociation) && entity.equals(opt.associatedEntity))
             {
-                setFkParams(mtmInsertCommand, obj, entity);
-                setForeignKeyParams(mtmInsertCommand, foreignKeys);
-                if (idx)
-                {
-                    mtmInsertCommand.setParam(idx.property, idx.value);
-                }
-                mtmInsertCommand.execute();
-            }
-        }
+                var mtmInsertCmd:InsertCommand = opt.mtmInsertCmd;
+                setIdentityParams(mtmInsertCmd, obj, entity);
+                setIdentMapParams(mtmInsertCmd, opt.idMap);
+                if (opt.a.indexed)
+                    mtmInsertCmd.setParam(opt.a.indexProperty, opt.indexValue);
 
-        private function createItem(
-            obj:Object,
-            entity:Entity,
-            foreignKeys:Array,
-            mtmInsertCommand:InsertCommand,
-            idx:Object):void
-        {
-            saveManyToOneAssociations(obj, entity);
-            var insertCommand:InsertCommand = entity.insertCommand;
-            createSuperEntity(insertCommand, obj, entity.superEntity);
-            setFieldParams(insertCommand, obj, entity);
-            setManyToOneAssociationParams(insertCommand, obj, entity);
-            setInsertTimestampParams(insertCommand);
-
-            if (syncSupport && !entity.hasCompositeKey())
-            {
-                insertCommand.setParam("version", 0);
-                insertCommand.setParam("serverId", 0);
+                mtmInsertCmd.execute();
             }
-            insertCommand.setParam("markedForDeletion", false);
-
-            if (foreignKeys && !mtmInsertCommand)
-            {
-                setForeignKeyParams(insertCommand, foreignKeys);
-                if (idx)
-                {
-                    insertCommand.setParam(idx.property, idx.value);
-                }
-            }
-            if (idx == null)
-            {
-                for each(var a:OneToManyAssociation in entity.oneToManyInverseAssociations)
-                {
-                    if (a.indexed)
-                    {
-                        insertCommand.setParam(a.indexProperty, 0);
-                    }
-                }
-            }
-            insertCommand.execute();
-
-            if (!entity.hasCompositeKey() && entity.superEntity == null)
-            {
-                obj[entity.pk.property] = insertCommand.lastInsertRowID;
-            }
-
-            // The mtmInsertCommand must be executed after the associated entity
-            // has been inserted to maintain relational integrity
-            if (foreignKeys && mtmInsertCommand)
-            {
-                setFkParams(mtmInsertCommand, obj, entity);
-                setForeignKeyParams(mtmInsertCommand, foreignKeys);
-                if (idx)
-                {
-                    mtmInsertCommand.setParam(idx.property, idx.value);
-                }
-                mtmInsertCommand.execute();
-            }
+            saveOneToManyAssociations(obj, entity);
+            saveManyToManyAssociations(obj, entity);
         }
 
         private function saveManyToOneAssociations(obj:Object, entity:Entity):void
@@ -554,69 +642,22 @@ package nz.co.codec.flexorm
                 {
                     if (isDynamicObject(value))
                     {
-                        saveItem(value, a.property);
+                        saveItem(value, { name: a.property });
                     }
                     else
                     {
-                        saveItem(value);
+                        saveItem(value, {});
                     }
                 }
             }
         }
 
-        private function createSuperEntity(insertCommand:InsertCommand, obj:Object, superEntity:Entity):void
-        {
-            if (superEntity == null)
-                return;
-
-            saveManyToOneAssociations(obj, superEntity);
-            var superInsertCommand:InsertCommand = superEntity.insertCommand;
-
-            if (syncSupport && !superEntity.hasCompositeKey())
-            {
-                superInsertCommand.setParam("version", 0);
-                superInsertCommand.setParam("serverId", 0);
-            }
-            superInsertCommand.setParam("markedForDeletion", false);
-
-            setFieldParams(superInsertCommand, obj, superEntity);
-            setManyToOneAssociationParams(superInsertCommand, obj, superEntity);
-            setInsertTimestampParams(superInsertCommand);
-            superInsertCommand.execute();
-            if (!superEntity.hasCompositeKey())
-            {
-                var id:int = superInsertCommand.lastInsertRowID;
-                var pk:PrimaryIdentity = superEntity.pk;
-                insertCommand.setParam(pk.property, id);
-                obj[pk.property] = id;
-            }
-        }
-
-        private function updateSuperEntity(obj:Object, superEntity:Entity):void
-        {
-            if (superEntity == null)
-                return;
-
-            saveManyToOneAssociations(obj, superEntity);
-            var superUpdateCommand:UpdateCommand = superEntity.updateCommand;
-            setFieldParams(superUpdateCommand, obj, superEntity);
-            if (!superEntity.hasCompositeKey())
-            {
-                var pk:PrimaryIdentity = superEntity.pk;
-                var id:int = obj[pk.property];
-                superUpdateCommand.setParam(pk.property, id);
-            }
-            setManyToOneAssociationParams(superUpdateCommand, obj, superEntity);
-            setUpdateTimestampParams(superUpdateCommand);
-            superUpdateCommand.execute();
-        }
-
         private function saveOneToManyAssociations(obj:Object, entity:Entity):void
         {
-            var foreignKeys:Array;
+            var idMap:Object = null;
             if (entity.hasCompositeKey())
             {
-                foreignKeys = getForeignKeys(obj, entity);
+                idMap = getIdentityMapFromInstance(obj, entity);
             }
             for each(var a:OneToManyAssociation in entity.oneToManyAssociations)
             {
@@ -625,24 +666,39 @@ package nz.co.codec.flexorm
                 {
                     if (!entity.hasCompositeKey())
                     {
-                        foreignKeys = [{ property: a.fkProperty, id: obj[entity.pk.property] }];
+                        idMap = getIdentityMap(a.fkProperty, obj[entity.pk.property]);
                     }
                     for (var i:int = 0; i < value.length; i++)
                     {
-                        if (a.indexed)
+                        var item:Object = value.getItemAt(i);
+                        var itemClass:Class = getClass(item);
+                        var itemCN:String = getClassName(itemClass);
+
+                        var itemEntity:Entity = (OBJECT_TYPE == itemCN)?
+                            getEntityForDynamicObject(item, a.property) :
+                            getEntity(itemClass);
+
+                        var associatedEntity:Entity = a.getAssociatedEntity(itemEntity);
+                        if (associatedEntity)
                         {
-                            saveItem(value.getItemAt(i), null, foreignKeys, null, { property: a.indexProperty, value: i });
+                            var opt:Object = {
+                                a               : a,
+                                associatedEntity: associatedEntity,
+                                idMap           : idMap
+                            };
+                            if (a.indexed)
+                                opt.indexValue = i;
+
+                            if (associatedEntity.isDynamicObject())
+                                opt.name = a.property;
+
+                            saveItem(item, opt);
                         }
                         else
                         {
-                            if (a.associatedEntity.isDynamicObject())
-                            {
-                                saveItem(value.getItemAt(i), a.property, foreignKeys);
-                            }
-                            else
-                            {
-                                saveItem(value.getItemAt(i), null, foreignKeys);
-                            }
+                            throw new Error("Attempting to save a collection " +
+                                            "item of a type not specified in " +
+                                            "the one-to-many association. ");
                         }
                     }
                 }
@@ -656,44 +712,32 @@ package nz.co.codec.flexorm
                 var value:IList = obj[a.property];
                 if (value && (!a.lazy || LazyList(value).loaded))
                 {
-                    var foreignKeys:Array = getForeignKeys(obj, entity);
+                    var idMap:Object = getIdentityMapFromInstance(obj, entity);
 
-                    var selectIndicesCommand:SelectManyToManyIndicesCommand = a.selectIndicesCommand;
-                    setFkParams(selectIndicesCommand, obj, entity);
-                    selectIndicesCommand.execute();
+                    var selectExistingCmd:SelectManyToManyKeysCommand = a.selectManyToManyKeysCmd;
+                    setIdentityParams(selectExistingCmd, obj, entity);
+                    selectExistingCmd.execute();
 
-                    var key:Key;
-
-                    var preIndices:Array = [];
-                    for each(var row:Object in selectIndicesCommand.result)
+                    var existing:Array = [];
+                    for each(var row:Object in selectExistingCmd.result)
                     {
-                        var index:Object = new Object();
-                        for each(key in a.associatedEntity.keys)
-                        {
-                            index[key.fkProperty] = row[key.fkColumn];
-                        }
-                        preIndices.push(index);
+                        existing.push(getIdentityMapFromAssociation(row, a.associatedEntity));
                     }
 
-                    var idx:Object;
+                    var map:Object;
                     for (var i:int = 0; i < value.length; i++)
                     {
                         var item:Object = value.getItemAt(i);
-                        var idm:Object = new Object();
-                        for each(key in a.associatedEntity.keys)
-                        {
-                            idm[key.fkProperty] = key.getIdValue(item);
-                        }
+                        var itemIdMap:Object = getIdentityMapFromInstance(item, a.associatedEntity);
 
                         var isLinked:Boolean = false;
                         var k:int = 0;
-
-                        for each(idx in preIndices)
+                        for each(map in existing)
                         {
                             isLinked = true;
-                            for each(key in a.associatedEntity.keys)
+                            for each(var identity:Identity in a.associatedEntity.identities)
                             {
-                                if (idm[key.fkProperty] != idx[key.fkProperty])
+                                if (itemIdMap[identity.fkProperty] != map[identity.fkProperty])
                                 {
                                     isLinked = false;
                                     break;
@@ -710,55 +754,53 @@ package nz.co.codec.flexorm
                             {
                                 if (a.indexed)
                                 {
-                                    var updateCommand:UpdateCommand = a.updateCommand;
-                                    setFkParams(updateCommand, obj, entity);
-                                    setFkParams(updateCommand, item, a.associatedEntity);
-                                    updateCommand.setParam(a.indexProperty, i);
-                                    updateCommand.execute();
+                                    var updateCmd:UpdateCommand = a.updateCommand;
+                                    setIdentMapParams(updateCmd, idMap);
+                                    setIdentMapParams(updateCmd, itemIdMap);
+                                    updateCmd.setParam(a.indexProperty, i);
+                                    updateCmd.execute();
                                 }
-                                saveItem(item);
+                                saveItem(item, {});
                             }
-                            preIndices.splice(k, 1);
+                            existing.splice(k, 1);
                         }
                         else
                         {
-                            var insertCommand:InsertCommand = a.insertCommand;
+                            var insertCmd:InsertCommand = a.insertCommand;
                             if (isCascadeSave(a))
                             {
                                 // insert link in associationTable after
                                 // inserting the associated entity instance
+                                var opt:Object = {
+                                    a               : a,
+                                    associatedEntity: a.associatedEntity,
+                                    idMap           : idMap,
+                                    mtmInsertCmd    : insertCmd
+                                }
                                 if (a.indexed)
-                                {
-                                    saveItem(item, null, foreignKeys, insertCommand, { property: a.indexProperty, value: i });
-                                }
-                                else
-                                {
-                                    saveItem(item, null, foreignKeys, insertCommand);
-                                }
+                                    opt.indexValue = i;
+
+                                saveItem(item, opt);
                             }
                             else // just create the link instead
                             {
-                                setFkParams(insertCommand, obj, entity);
-                                setFkParams(insertCommand, item, a.associatedEntity);
+                                setIdentMapParams(insertCmd, idMap);
+                                setIdentMapParams(insertCmd, itemIdMap);
                                 if (a.indexed)
-                                {
-                                    insertCommand.setParam(a.indexProperty, i);
-                                }
-                                insertCommand.execute();
+                                    insertCmd.setParam(a.indexProperty, i);
+
+                                insertCmd.execute();
                             }
                         }
                     }
                     // for each pre index left
-                    for each(idx in preIndices)
+                    for each(map in existing)
                     {
                         // delete link from associationTable
-                        var deleteCommand:DeleteCommand = a.deleteCommand;
-                        for each(key in a.associatedEntity.keys)
-                        {
-                            deleteCommand.setParam(key.fkProperty, idx[key.fkProperty]);
-                        }
-                        setFkParams(deleteCommand, obj, entity);
-                        deleteCommand.execute();
+                        var deleteCmd:DeleteCommand = a.deleteCommand;
+                        setIdentMapParams(deleteCmd, idMap);
+                        setIdentMapParams(deleteCmd, map);
+                        deleteCmd.execute();
                     }
                 }
             }
@@ -767,25 +809,35 @@ package nz.co.codec.flexorm
         public function markForDeletion(obj:Object):void
         {
             var entity:Entity = getEntityForObject(obj);
-            var markForDeletionCommand:MarkForDeletionCommand = entity.markForDeletionCommand;
-            setKeyParams(markForDeletionCommand, obj, entity);
-            markForDeletionCommand.execute();
+            var markForDeletionCmd:MarkForDeletionCommand = entity.markForDeletionCmd;
+            setIdentityParams(markForDeletionCmd, obj, entity);
+            markForDeletionCmd.execute();
+        }
+
+        public function removeItem(cls:Class, id:int):void
+        {
+            remove(loadItem(cls, id));
+        }
+
+        public function removeItemByCompositeKey(cls:Class, compositeKeys:Array):void
+        {
+            remove(loadItemByCompositeKey(cls, compositeKeys));
         }
 
         public function remove(obj:Object):void
         {
-            // if not already part of a user-defined transaction, then
-            // start one to group all cascade 'delete' operations
+            // if not already part of a programmer-defined transaction,
+            // then start one to group all cascade 'delete' operations
             try {
                 if (!inTransaction)
                 {
                     sqlConnection.begin();
-                    removeObj(obj);
+                    removeObject(obj);
                     sqlConnection.commit();
                 }
                 else
                 {
-                    removeObj(obj);
+                    removeObject(obj);
                 }
             }
             catch (e:SQLError)
@@ -794,69 +846,70 @@ package nz.co.codec.flexorm
             }
         }
 
-        public function removeItem(cls:Class, id:int):void
+        private function removeObject(obj:Object):void
         {
-            var obj:Object = load(cls, id);
-            removeObj(obj);
+            removeEntity(getEntityForObject(obj), obj);
         }
 
-        private function removeObj(obj:Object):void
+        private function removeEntity(entity:Entity, obj:Object):void
         {
-            var entity:Entity = getEntityForObject(obj);
-            removeOneToManyAssociations(obj, entity);
+            if (entity == null)
+                return;
 
-            // Doesn't make sense to support cascade delete on many-to-many associations
+            removeOneToManyAssociations(entity, obj);
 
-            var deleteCommand:DeleteCommand = entity.deleteCommand;
-            setKeyParams(deleteCommand, obj, entity);
-            deleteCommand.execute();
-            if (!entity.hasCompositeKey())
-            {
-                var id:int = obj[entity.pk.property];
-                removeSuperEntity(id, entity.superEntity);
-            }
-            removeManyToOneAssociations(obj, entity);
+            // Doesn't make sense to support 'cascade delete' on many-to-many
+            // associations
+
+            // obj must be concrete therefore I do not need to worry if entity
+            // is a superEntity
+
+            var deleteCmd:DeleteCommand = entity.deleteCommand;
+            setIdentityParams(deleteCmd, obj, entity);
+            deleteCmd.execute();
+            removeEntity(entity.superEntity, obj);
+            removeManyToOneAssociations(entity, obj);
         }
 
-        private function removeOneToManyAssociations(obj:Object, entity:Entity):void
+        private function removeOneToManyAssociations(entity:Entity, obj:Object):void
         {
             for each(var a:OneToManyAssociation in entity.oneToManyAssociations)
             {
                 if (isCascadeDelete(a))
                 {
-                    var deleteCommand:DeleteCommand = a.deleteCommand;
-                    if (entity.hasCompositeKey())
+                    if (a.multiTyped)
                     {
-                        setKeyParams(deleteCommand, obj, entity);
+                        for each(var type:AssociatedType in a.associatedTypes)
+                        {
+                            removeEntity(type.associatedEntity, obj);
+                        }
                     }
                     else
                     {
-                        deleteCommand.setParam(a.fkProperty, obj[entity.pk.property]);
+                        var deleteCmd:DeleteCommand = a.deleteCommand;
+                        if (entity.hasCompositeKey())
+                        {
+                            setIdentityParams(deleteCmd, obj, entity);
+                        }
+                        else
+                        {
+                            deleteCmd.setParam(a.fkProperty, obj[entity.pk.property]);
+                        }
+                        deleteCmd.execute();
                     }
-                    deleteCommand.execute();
                 }
                 // TODO else set the FK to 0 ?
             }
         }
 
-        private function removeSuperEntity(id:int, superEntity:Entity):void
-        {
-            if (superEntity == null)
-                return;
-
-            var deleteCommand:DeleteCommand = superEntity.deleteCommand;
-            deleteCommand.setParam(superEntity.pk.property, id);
-            deleteCommand.execute();
-        }
-
-        private function removeManyToOneAssociations(obj:Object, entity:Entity):void
+        private function removeManyToOneAssociations(entity:Entity, obj:Object):void
         {
             for each(var a:Association in entity.manyToOneAssociations)
             {
                 var value:Object = obj[a.property];
                 if (value && isCascadeDelete(a))
                 {
-                    removeObj(value);
+                    removeObject(value);
                 }
             }
         }
@@ -876,7 +929,7 @@ package nz.co.codec.flexorm
             if (row == null)
                 return null;
 
-            var value:Object = getCachedValue(entity, getKeyMap(row, entity));
+            var value:Object = getCachedValue(entity, getIdentityMapFromRow(row, entity));
             if (value)
                 return value;
 
@@ -885,16 +938,12 @@ package nz.co.codec.flexorm
             {
                 instance[f.property] = row[f.column];
             }
-            if (!entity.hasCompositeKey())
-            {
-                var id:int = row[entity.pk.column];
-                loadSuperProperties(instance, id, entity.superEntity);
-            }
-
+            loadSuperProperties(instance, row, entity);
             loadManyToOneAssociations(instance, row, entity);
 
-            // must be after IDs on instance is set and
-            // after loadManyToOneAssociations to load composite keys
+            // Must be after keys on instance has been loaded, which includes:
+            // - loadManyToOneAssociations to load composite keys, and
+            // - loadSuperProperties to load inherited keys.
             setCachedValue(instance, entity);
 
             loadOneToManyAssociations(instance, row, entity);
@@ -903,15 +952,28 @@ package nz.co.codec.flexorm
             return instance;
         }
 
-        private function loadSuperProperties(instance:Object, id:int, superEntity:Entity):void
+        private function loadSuperProperties(instance:Object, row:Object, entity:Entity):void
         {
+            var superEntity:Entity = entity.superEntity;
             if (superEntity == null)
                 return;
 
-            var superInstance:Object = load(superEntity.cls, id);
+            var idMap:Object = entity.hasCompositeKey() ?
+                getIdentityMapFromRow(row, superEntity) :
+                getIdentityMap(superEntity.fkProperty, row[entity.pk.column]);
+
+            var superInstance:Object = getCachedValue(superEntity, idMap);
+            if (superInstance == null)
+            {
+                superInstance = loadEntity(superEntity, idMap);
+            }
             for each(var f:Field in superEntity.fields)
             {
-                instance[f.property] = superInstance[f.property];
+                // commented out to populate a sub instance's inherited ID field
+//                if (superEntity.hasCompositeKey() || (f.property != superEntity.pk.property))
+//                {
+                    instance[f.property] = superInstance[f.property];
+//                }
             }
             for each(var mto:Association in superEntity.manyToOneAssociations)
             {
@@ -931,36 +993,37 @@ package nz.co.codec.flexorm
         {
             for each(var a:Association in entity.manyToOneAssociations)
             {
-                var value:Object = getCachedAssociationValue(a, row);
+                var associatedEntity:Entity = a.associatedEntity;
+                var value:Object = null;
+                if (!associatedEntity.isSuperEntity)
+                {
+                    value = getCachedAssociationValue(a, row);
+                }
                 if (value)
                 {
                     instance[a.property] = value;
                 }
                 else
                 {
-                    var associatedEntity:Entity = a.associatedEntity;
-                    var keyMap:Object = null;
+                    var idMap:Object = null;
                     if (associatedEntity.hasCompositeKey())
                     {
-                        keyMap = getFkMap(row, associatedEntity);
+                        idMap = getIdentityMapFromAssociation(row, associatedEntity);
                     }
                     else
                     {
                         var id:int = row[a.fkColumn];
                         if (id > 0)
                         {
-                            keyMap = new Object();
-                            keyMap[associatedEntity.pk.property] = id;
+                            idMap = getIdentityMap(associatedEntity.fkProperty, id);
                         }
                     }
-                    if (keyMap)
+                    if (idMap)
                     {
-                        // loadItems may return an empty collection if
-                        // a.ownerEntity (FK) has been deleted and the
-                        // association was not set to 'cascade-delete'
-                        var items:ArrayCollection = loadItems(associatedEntity.selectCommand, keyMap, associatedEntity);
-
-                        instance[a.property] = (items.length > 0)? items[0] : null;
+                        // May return no result if a.ownerEntity (FK) has been
+                        // deleted and the association was not set to
+                        // 'cascade-delete'
+                        instance[a.property] = loadComplexEntity(associatedEntity, idMap);
                     }
                 }
             }
@@ -970,21 +1033,12 @@ package nz.co.codec.flexorm
         {
             for each(var a:OneToManyAssociation in entity.oneToManyAssociations)
             {
+                var idMap:Object = entity.hasCompositeKey() ?
+                    getIdentityMapFromRow(row, entity) :
+                    getIdentityMap(a.fkProperty, row[entity.pk.column]);
                 if (a.lazy)
                 {
-                    var keyMap:Object = new Object();
-                    if (entity.hasCompositeKey())
-                    {
-                        for each(var key:Key in entity.keys)
-                        {
-                            keyMap[key.fkProperty] = row[key.column];
-                        }
-                    }
-                    else
-                    {
-                        keyMap[a.fkProperty] = row[entity.pk.column];
-                    }
-                    var lazyList:LazyList = new LazyList(this, a, keyMap);
+                    var lazyList:LazyList = new LazyList(this, a, idMap);
                     var value:ArrayCollection = new ArrayCollection();
                     value.list = lazyList;
                     instance[a.property] = value;
@@ -992,7 +1046,7 @@ package nz.co.codec.flexorm
                 }
                 else
                 {
-                    instance[a.property] = selectOneToManyAssociation(a, row);
+                    instance[a.property] = loadOneToManyAssociationInternal(a, idMap);
                 }
             }
         }
@@ -1003,7 +1057,7 @@ package nz.co.codec.flexorm
             {
                 if (a.lazy)
                 {
-                    var lazyList:LazyList = new LazyList(this, a, getKeyMap(row, entity));
+                    var lazyList:LazyList = new LazyList(this, a, getIdentityMapFromRow(row, entity));
                     var value:ArrayCollection = new ArrayCollection();
                     value.list = lazyList;
                     instance[a.property] = value;
@@ -1016,39 +1070,96 @@ package nz.co.codec.flexorm
             }
         }
 
-        private function selectOneToManyAssociation(a:OneToManyAssociation, row:Object, name:String=null):ArrayCollection
+        private function selectManyToManyAssociation(a:ManyToManyAssociation, row:Object):ArrayCollection
         {
-            var selectCommand:SelectCommand = a.selectCommand;
-            if (a.ownerEntity.hasCompositeKey())
+            var selectCmd:SelectManyToManyCommand = a.selectCommand;
+            setIdentMapParams(selectCmd, getIdentityMapFromRow(row, a.ownerEntity));
+            selectCmd.execute();
+            return typeArray(selectCmd.result, a.associatedEntity);
+        }
+
+        public function createCriteria(cls:Class):Criteria
+        {
+            var entity:Entity = getEntity(cls);
+            return entity.criteria;
+        }
+
+        public function fetchCriteria(crit:Criteria):ArrayCollection
+        {
+            crit.execute();
+            return typeArray(crit.result, crit.entity);
+        }
+
+        public function fetchCriteriaUniq(crit:Criteria):Object
+        {
+            crit.execute();
+            var result:ArrayCollection = typeArray(crit.result, crit.entity);
+            return (result.length > 0)? result[0] : null;
+        }
+
+        /**
+         * Returns metadata for a persistent object. If not already defined,
+         * then uses the EntityIntrospector to load metadata using the
+         * persistent object's annotations.
+         */
+        private function getEntity(cls:Class):Entity
+        {
+            var c:Class = (cls is PersistentEntity)? cls.__class : cls;
+            var cn:String = getClassName(c);
+            var entity:Entity = entityMap[cn];
+            if (entity == null || !entity.initialisationComplete)
             {
-                for each(var key:Key in a.ownerEntity.keys)
-                {
-                    selectCommand.setParam(key.fkProperty, row[key.column]);
-                }
+                entity = introspector.loadMetadata(c);
+            }
+            return entity;
+        }
+
+        /**
+         * Helper method added by WDRogers, 2008-05-16
+         */
+        private function getEntityForObject(obj:Object, name:String=null):Entity
+        {
+            if (obj == null)
+                return null;
+
+            var c:Class = getClass(obj);
+            var cn:String = getClassName(c);
+            if (OBJECT_TYPE == cn)
+            {
+                return getEntityForDynamicObject(obj, name);
             }
             else
             {
-                selectCommand.setParam(a.fkProperty, row[a.ownerEntity.pk.column]);
+                return getEntity(c);
             }
-            selectCommand.execute();
-            return typeArray(selectCommand.result, a.associatedEntity);
         }
 
-        private function selectManyToManyAssociation(a:ManyToManyAssociation, row:Object):ArrayCollection
+        private function getEntityForDynamicObject(obj:Object, name:String):Entity
         {
-            var selectCommand:SelectManyToManyCommand = a.selectCommand;
-            for each(var key:Key in a.ownerEntity.keys)
+            if (name == null)
+                throw new Error("Name must be specified for a dynamic object. ");
+
+            var entity:Entity = entityMap[name];
+            if (entity == null || !entity.initialisationComplete)
             {
-                selectCommand.setParam(key.fkProperty, row[key.column]);
+                entity = introspector.loadMetadataForDynamicObject(obj, name);
             }
-            selectCommand.execute();
-            return typeArray(selectCommand.result, a.associatedEntity);
+            return entity;
         }
 
-        public function createCriteria(c:Class):Criteria
+        /**
+         * !! Not fully implemented. Need to save metadata to the database since
+         * annotations are not available as persistent memory on dynamic objects.
+         */
+        public function loadDynamicObject(name:String, id:int):Object
         {
-            var entity:Entity = getEntity(c);
-            return new Criteria(entity, sqlConnection, debugLevel);
+            var entity:Entity = entityMap[name];
+            if (entity == null)
+                return null;
+
+            var instance:Object = loadEntity(entity, getIdentityMap(entity.fkProperty, id));
+            clearCache();
+            return instance;
         }
 
     }

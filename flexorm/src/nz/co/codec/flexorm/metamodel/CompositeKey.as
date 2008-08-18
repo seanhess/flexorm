@@ -1,17 +1,17 @@
 package nz.co.codec.flexorm.metamodel
 {
-    public class CompositeIdentity implements IIdentity
+    public class CompositeKey implements Key
     {
         /**
          * The associated entity of the many-to-one association.
          */
         public var associatedEntity:Entity;
 
-        private var _property:String;
-
         /**
          * Property name of the many-to-one association.
          */
+        private var _property:String;
+
         public function set property(value:String):void
         {
             _property = value;
@@ -22,7 +22,7 @@ package nz.co.codec.flexorm.metamodel
             return _property;
         }
 
-        public function CompositeIdentity(hash:Object=null)
+        public function CompositeKey(hash:Object=null)
         {
             for (var key:String in hash)
             {

@@ -4,7 +4,7 @@ package nz.co.codec.flexorm
 
     public interface ICommand
     {
-        function setResponder(value:IResponder):void;
+        function set responder(value:IResponder):void;
 
         function execute():void;
 

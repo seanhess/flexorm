@@ -1,29 +1,28 @@
 package nz.co.codec.flexorm
 {
+    import flash.utils.getQualifiedClassName;
+
     public class NonBlockingExecutor extends Executor
     {
-        public function NonBlockingExecutor(label:String=null, debugLevel:int=0, level:int=0)
+        public function NonBlockingExecutor()
         {
-            super(label? "NonBlockingExecutor::" + label : null, debugLevel, level);
+            super();
         }
 
         override public function execute():void
         {
             if (q.length == 0)
             {
-                _responder.result(new EntityEvent(_response));
+                _responder.result(new EntityEvent(data));
             }
             else
             {
-                for each(var step:Object in q)
+                for each(var executable:Object in q)
                 {
-                    if (step.executable is ICommand)
+                    if (executable is ICommand)
                     {
-                        var command:ICommand = ICommand(step.executable);
-                        command.setResponder(this);
-                        if (_debugLevel > 0 && step.label)
-                            trace(label + " executing command " + step.label);
-
+                        var command:ICommand = ICommand(executable);
+                        command.responder = this;
                         command.execute();
                     }
                 }
@@ -35,7 +34,12 @@ package nz.co.codec.flexorm
             lastResult = data;
             if (--childCount == 0)
             {
-                _responder.result(new EntityEvent(_response));
+//                if (debugLevel > 0)
+//                {
+//                    trace("<< " + getQualifiedClassName(data));
+//                    trace(data);
+//                }
+                _responder.result(new EntityEvent(data));
             }
         }
 

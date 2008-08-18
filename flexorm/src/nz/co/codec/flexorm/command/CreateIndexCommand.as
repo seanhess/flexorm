@@ -6,15 +6,21 @@ package nz.co.codec.flexorm.command
     {
         private var _name:String;
 
-        private var indexColumns:Array = [];
+        private var indexColumns:Array;
 
-        public function CreateIndexCommand(table:String, name:String, sqlConnection:SQLConnection, debugLevel:int=0)
+        public function CreateIndexCommand(
+            sqlConnection:SQLConnection,
+            schema:String,
+            table:String,
+            name:String,
+            debugLevel:int=0)
         {
-            super(table, sqlConnection, debugLevel);
+            super(sqlConnection, schema, table, debugLevel);
             _name = name;
+            indexColumns = [];
         }
 
-        public function addIndexColumn(column:String):void
+        public function addIndex(column:String):void
         {
             indexColumns.push(column);
             _changed = true;
@@ -22,8 +28,8 @@ package nz.co.codec.flexorm.command
 
         override protected function prepareStatement():void
         {
-            var sql:String = "create index if not exists main.";
-            sql += (_name)? _name : _table + "_" + indexColumns[0] + "_idx";
+            var sql:String = "create index if not exists " + _schema + ".";
+            sql += _name ? _name : _table + "_" + indexColumns[0] + "_idx";
             sql += " on " + _table + "(";
             for each(var column:String in indexColumns)
             {
@@ -37,7 +43,7 @@ package nz.co.codec.flexorm.command
 
         public function toString():String
         {
-            return "CREATE INDEX: " + _statement.text;
+            return "CREATE INDEX " + _statement.text;
         }
 
     }

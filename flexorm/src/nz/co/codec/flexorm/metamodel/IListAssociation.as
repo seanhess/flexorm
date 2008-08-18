@@ -4,7 +4,7 @@ package nz.co.codec.flexorm.metamodel
     {
         function get ownerEntity():Entity;
 
-        function get associatedEntity():Entity;
+        function get associatedTypes():Array;
 
     }
 }

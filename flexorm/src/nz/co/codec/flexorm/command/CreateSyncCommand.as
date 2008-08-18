@@ -3,7 +3,6 @@ package nz.co.codec.flexorm.command
     import flash.data.SQLColumnSchema;
     import flash.data.SQLConnection;
     import flash.data.SQLSchemaResult;
-    import flash.data.SQLStatement;
     import flash.data.SQLTableSchema;
     import flash.errors.SQLError;
 
@@ -11,18 +10,23 @@ package nz.co.codec.flexorm.command
 
     import nz.co.codec.flexorm.ICommand;
 
-    public class CreateCommand extends SQLCommand
+    public class CreateSyncCommand extends SQLCommand
     {
+        private var _created:Boolean;
+
         private var _pk:String;
 
-        private var _created:Boolean = false;
-
-        public function CreateCommand(table:String, sqlConnection:SQLConnection, debugLevel:int=0)
+        public function CreateSyncCommand(
+            sqlConnection:SQLConnection,
+            schema:String,
+            table:String,
+            debugLevel:int=0)
         {
-            super(table, sqlConnection, debugLevel);
+            super(sqlConnection, schema, table, debugLevel);
+            _created = false;
         }
 
-        public function setPk(column:String):void
+        public function setPrimaryKey(column:String):void
         {
             _pk = column + " integer primary key autoincrement";
             _changed = true;
@@ -30,23 +34,23 @@ package nz.co.codec.flexorm.command
 
         override public function addColumn(column:String, type:String):void
         {
-            if (_columns == null)
-                _columns = new Object();
-
-            _columns[column] = { type: type, constraint: null };
+            _columns[column] = { type: type };
             _changed = true;
         }
 
-        public function addFkColumn(
+        public function addForeignKey(
             column:String,
             type:String,
-            fkConstraintTable:String,
-            fkConstraintColumn:String):void
+            constraintTable:String,
+            constraintColumn:String):void
         {
-            if (_columns == null)
-                _columns = new Object();
-
-            _columns[column] = { type: type, constraint: { table: fkConstraintTable, column: fkConstraintColumn } };
+            _columns[column] = {
+                type: type,
+                constraint: {
+                    table: constraintTable,
+                    column: constraintColumn
+                }
+            };
             _changed = true;
         }
 
@@ -56,8 +60,8 @@ package nz.co.codec.flexorm.command
             var existingColumns:ArrayCollection = getExistingColumns();
             if (existingColumns)
             {
-                _created = true;
                 sql = buildAlterSQL(existingColumns);
+                _created = true;
             }
             else
             {
@@ -65,7 +69,6 @@ package nz.co.codec.flexorm.command
             }
             if (sql)
                 _statement.text = sql;
-
             _changed = false;
         }
 
@@ -88,7 +91,7 @@ package nz.co.codec.flexorm.command
                     return existingColumns;
                 }
             }
-            catch (error:SQLError) { }
+            catch (err:SQLError) { }
             return null;
         }
 
@@ -99,20 +102,19 @@ package nz.co.codec.flexorm.command
             {
                 if (!existingColumns.contains(column))
                 {
-                    sql += "alter table " + _table +
+                    sql += "alter table " + _schema + "." + _table +
                         " add " + column + " " + _columns[column].type + ";";
                 }
             }
-            return (sql == "")? null : sql;
+            return (sql.length > 0)? sql : null;
         }
 
         private function buildCreateSQL():String
         {
-            var sql:String = "create table if not exists " + _table + " (";
+            var sql:String = "create table if not exists " + _schema + "." + _table + "(";
             if (_pk)
-            {
                 sql += _pk + ",";
-            }
+
             for (var column:String in _columns)
             {
                 sql += column + " " + _columns[column].type + ",";
@@ -133,19 +135,22 @@ package nz.co.codec.flexorm.command
                 debug();
 
             _statement.execute();
+
+            // Create foreign key constraint triggers
             if (!_created)
             {
-                // create foreign key constraint triggers
                 for (var column:String in _columns)
                 {
                     var constraint:Object = _columns[column].constraint;
                     if (constraint)
                     {
-                        var insertTrigger:ICommand = new FkConstraintInsertTriggerCommand(_table, column, constraint.table, constraint.column, _sqlConnection, _debugLevel);
+                        var insertTrigger:ICommand = new ConstraintInsertTriggerCommand(_sqlConnection, _schema, _table, column, constraint.table, constraint.column, _debugLevel);
                         insertTrigger.execute();
-                        var updateTrigger:ICommand = new FkConstraintUpdateTriggerCommand(_table, column, constraint.table, constraint.column, _sqlConnection, _debugLevel);
+
+                        var updateTrigger:ICommand = new ConstraintUpdateTriggerCommand(_sqlConnection, _schema, _table, column, constraint.table, constraint.column, _debugLevel);
                         updateTrigger.execute();
-                        var deleteTrigger:ICommand = new FkConstraintDeleteTriggerCommand(_table, column, constraint.table, constraint.column, _sqlConnection, _debugLevel);
+
+                        var deleteTrigger:ICommand = new ConstraintDeleteTriggerCommand(_sqlConnection, _schema, _table, column, constraint.table, constraint.column, _debugLevel);
                         deleteTrigger.execute();
                     }
                 }
@@ -154,7 +159,7 @@ package nz.co.codec.flexorm.command
 
         public function toString():String
         {
-            return "CREATE " + _table + ": " + _statement.text;
+            return "CREATE SYNC " + _table + ": " + _statement.text;
         }
 
     }

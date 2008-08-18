@@ -110,5 +110,13 @@ package nz.co.codec.flexorm.util
             }
         }
 
+        public static function endsWith(str:String, match:String):Boolean
+        {
+            if (str == null)
+                return false;
+
+            return (str.lastIndexOf(match) == (str.length - match.length));
+        }
+
     }
 }

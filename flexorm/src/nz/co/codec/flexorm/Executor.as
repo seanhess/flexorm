@@ -1,73 +1,74 @@
 package nz.co.codec.flexorm
 {
+    import flash.utils.getQualifiedClassName;
+
     import mx.rpc.IResponder;
 
     public class Executor implements IExecutor
     {
+        protected var childCount:int;
+
+        protected var q:Array;
+
+        protected var lastResult:Object;
+
         protected var _responder:IResponder;
 
-        protected var _response:Object = null;
+        private var _workingStorage:Object;
 
-        protected var lastResult:Object = null;
+        private var _data:Object;
 
-        protected var childCount:int = 0;
+        private var _id:int;
 
-        protected var q:Array = [];
-
-        protected var _debugLevel:int;
-
-        private var _id:int = 0;
+        private var _debugLevel:int;
 
         private var _label:String;
 
-        private var _level:int;
-
-        public function Executor(label:String, debugLevel:int, level:int)
+        public function Executor()
         {
-            _label = label;
-            _debugLevel = debugLevel;
-            _level = level;
+            _workingStorage = {};
+            _debugLevel = 0;
+            childCount = 0;
+            q = [];
         }
 
-        public function get label():String
+        public function branchBlocking():BlockingExecutor
         {
-            return getIndent() + _label;
-        }
+            var executor:BlockingExecutor = new BlockingExecutor();
 
-        public function getIndent():String
-        {
-            var indent:String = "";
-            for (var i:int = 0; i < _level; i++)
-            {
-                indent += "    ";
-            }
-            return indent;
-        }
-
-        public function branchBlocking(label:String=null):BlockingExecutor
-        {
-            var executor:BlockingExecutor = new BlockingExecutor(label, _debugLevel, _level + 1);
-            addCommand(executor, label);
+            // reference to the same data store anywhere in the executor tree
+            executor.workingStorage = _workingStorage;
+            executor.debugLevel = _debugLevel;
+            add(executor);
             return executor;
         }
 
-        public function branchNonBlocking(label:String=null):NonBlockingExecutor
+        public function branchNonBlocking():NonBlockingExecutor
         {
-            var executor:NonBlockingExecutor = new NonBlockingExecutor(label, _debugLevel, _level + 1);
-            addCommand(executor, label);
+            var executor:NonBlockingExecutor = new NonBlockingExecutor();
+
+            // reference to the same data store anywhere in the executor tree
+            executor.workingStorage = _workingStorage;
+            executor.debugLevel = _debugLevel;
+            add(executor);
             return executor;
         }
 
         // abstract
         public function execute():void { }
 
-        public function addCommand(value:ICommand, label:String=null):void
+        public function add(command:ICommand, resultHandler:Function=null):void
         {
             childCount++;
-            q.push({ executable: value, label: label });
+            q.push(command);
+            if (resultHandler != null)
+            {
+                childCount++;
+                q.push(resultHandler);
+            }
         }
 
-        public function setResponder(value:IResponder):void
+        public function set responder(value:IResponder):void
         {
             _responder = value;
         }
@@ -77,14 +78,29 @@ package nz.co.codec.flexorm
             return (_responder is IExecutor)? IExecutor(_responder) : null;
         }
 
-        public function set response(value:Object):void
+        public function setProperty(name:String, value:*):void
         {
-            _response = value;
+            _workingStorage[name] = value;
         }
 
-        public function get response():Object
+        public function getProperty(name:String):*
         {
-            return _response;
+            return _workingStorage[name];
+        }
+
+        internal function set workingStorage(value:Object):void
+        {
+            _workingStorage = value;
+        }
+
+        public function set data(value:Object):void
+        {
+            _data = value;
+        }
+
+        public function get data():Object
+        {
+            return _data;
         }
 
         public function set id(value:int):void
@@ -97,11 +113,33 @@ package nz.co.codec.flexorm
             return _id;
         }
 
+        public function set debugLevel(value:int):void
+        {
+            _debugLevel = value;
+        }
+
+        public function get debugLevel():int
+        {
+            return _debugLevel;
+        }
+
+        public function set label(value:String):void
+        {
+            _label = value;
+        }
+
+        public function get label():String
+        {
+            return _label;
+        }
+
         // abstract
         public function result(data:Object):void { }
 
         public function fault(info:Object):void
         {
+            trace("!! " + getQualifiedClassName(info));
+            trace(info);
             _responder.fault(info);
         }
 
