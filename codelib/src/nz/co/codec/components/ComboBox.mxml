@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:ComboBox xmlns:mx="http://www.adobe.com/2006/mxml">
+    <mx:Script>
+        <![CDATA[
+            import flash.utils.describeType;
+
+            import mx.core.IUID;
+
+            private var candidateValue:Object;
+
+            private var valueDirty:Boolean = false;
+
+            private var candidateDataProvider:Object;
+
+            private var dataProviderDirty:Boolean = false;
+
+            public function set value(val:Object):void
+            {
+                candidateValue = val;
+                valueDirty = true;
+                invalidateProperties();
+            }
+
+            override public function set dataProvider(value:Object):void
+            {
+                candidateDataProvider = value;
+                dataProviderDirty = true;
+                invalidateProperties();
+            }
+
+            override protected function commitProperties():void
+            {
+                super.commitProperties();
+
+                if (dataProviderDirty)
+                {
+                    super.dataProvider = candidateDataProvider;
+                    dataProviderDirty = false;
+                }
+
+                if (valueDirty)
+                {
+                    applyValue(candidateValue);
+                    valueDirty = false;
+                }
+            }
+
+            private function applyValue(val:Object):void
+            {
+                if (!val)
+                    return;
+
+                var idProperty:String = null;
+                if (val is IUID)
+                {
+                    idProperty = "uid";
+                }
+                else if (val.hasOwnProperty("id"))
+                {
+                    idProperty = "id";
+                }
+                if (idProperty == null)
+                {
+                    var xml:XML = describeType(val);
+                    var variables:XMLList = xml.accessor;
+                    for each(var v:Object in variables)
+                    {
+                        if (v.metadata.(@name == "Id").length() > 0)
+                        {
+                            idProperty = v.@name.toString();
+                            break;
+                        }
+                    }
+                }
+                if (idProperty == null)
+                {
+                    selectedIndex = -1;
+                    return;
+                }
+                if (val && dataProvider)
+                {
+                    for (var i:uint = 0; i < dataProvider.length; i++)
+                    {
+                        if (val[idProperty] == dataProvider[i][idProperty])
+                        {
+                            selectedIndex = i;
+                            return;
+                        }
+                    }
+                }
+                selectedIndex = -1;
+            }
+        ]]>
+    </mx:Script>
+</mx:ComboBox>
