@@ -7,6 +7,8 @@ package ormtest
     import mx.collections.IList;
 
     import nz.co.codec.flexorm.EntityManager;
+    import nz.co.codec.flexorm.criteria.Criteria;
+    import nz.co.codec.flexorm.criteria.Sort;
 
     import ormtest.model.A;
     import ormtest.model.B;
@@ -57,6 +59,7 @@ package ormtest
             ts.addTest(new EntityManagerTest("testSaveOneToManyUntypedObject"));
             ts.addTest(new EntityManagerTest("testRecursiveJoin"));
             ts.addTest(new EntityManagerTest("testLazyLoading"));
+            ts.addTest(new EntityManagerTest("testCriteriaAPI"));
             return ts;
         }
 
@@ -87,7 +90,6 @@ package ormtest
             var fogCreek:Organisation = new Organisation();
             fogCreek.name = "Fog Creek";
             em.save(fogCreek);
-
 
             var organisations:ArrayCollection = em.findAll(Organisation);
             assertEquals(organisations.length, 3);
@@ -471,8 +473,8 @@ package ormtest
             var obj:Object = new Object();
             obj.name = "Test Object";
 
-            var handle:int = em.save(obj, "test");
-            var loadedObject:Object = em.loadObject("test", handle);
+            var handle:int = em.save(obj, { name: "test" });
+            var loadedObject:Object = em.loadDynamicObject("test", handle);
             assertEquals(loadedObject.name, "Test Object");
         }
 
@@ -487,9 +489,9 @@ package ormtest
             mto.name = "Many To One";
             obj.mto = mto;
 
-            var handle:int = em.save(obj, "test");
+            var handle:int = em.save(obj, { name: "test" });
 
-            var loadedObject:Object = em.loadObject("test", handle);
+            var loadedObject:Object = em.loadDynamicObject("test", handle);
             assertEquals(loadedObject.mto.name, "Many To One");
         }
 
@@ -514,9 +516,9 @@ package ormtest
             myList.addItem(y);
             obj.myList = myList;
 
-            var handle:int = em.save(obj, "test");
+            var handle:int = em.save(obj, { name: "test" });
 
-            var loadedObject:Object = em.loadObject("test", handle);
+            var loadedObject:Object = em.loadDynamicObject("test", handle);
             assertEquals(loadedObject.myList[0].another.type, "some type");
         }
 
@@ -562,6 +564,21 @@ package ormtest
 
             var loadedCar:Vehicle = em.load(Vehicle, car.id) as Vehicle;
             assertEquals(loadedCar.parts.length, 2);
+        }
+
+        public function testCriteriaAPI():void
+        {
+            trace("\nTest Criteria API");
+            trace("=================");
+            var organisation:Organisation = new Organisation();
+            organisation.name = "Atlassian";
+            em.save(organisation);
+
+            var criteria:Criteria = em.createCriteria(Organisation);
+            criteria.addLikeCondition("name", "lass").addSort("name", Sort.ASC);
+            var result:ArrayCollection = em.fetchCriteria(criteria);
+            var loadedOrganisation:Organisation = result[0] as Organisation;
+            assertEquals(loadedOrganisation.name, "Atlassian");
         }
 
     }

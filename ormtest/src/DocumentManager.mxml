@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:WindowedApplication xmlns:mx="http://www.adobe.com/2006/mxml" layout="absolute"
+    width="620"
+    creationComplete="loadData()">
+    <mx:Script>
+        <![CDATA[
+            import nz.co.codec.flexorm.criteria.Criteria;
+            import mx.collections.HierarchicalData;
+            import mx.collections.ArrayCollection;
+            import mx.events.ListEvent;
+            import nz.co.codec.flexorm.EntityManager;
+            import ormtest.model.Document;
+            import ormtest.model.FileObject;
+            import ormtest.model.Folder;
+
+            private var em:EntityManager = EntityManager.instance;
+
+            private var filesRoot:Folder;
+
+            private var removedItems:Array = [];
+
+            [Bindable]
+            private var addFolderBtnEnabled:Boolean;
+
+            [Bindable]
+            private var addDocumentBtnEnabled:Boolean;
+
+            private function loadData():void
+            {
+                em.debugLevel = 1;
+                em.openSyncConnection("tree-test2.db");
+                var crit:Criteria = em.createCriteria(Folder);
+                crit.addNullCondition("parent");
+                filesRoot = em.fetchCriteriaUniq(crit) as Folder;
+                if (filesRoot == null)
+                    filesRoot = new Folder();
+
+                filesGrid.dataProvider = new HierarchicalData(filesRoot);
+                filesGrid.addEventListener(ListEvent.CHANGE, gridChangeHandler);
+            }
+
+            private function gridChangeHandler(event:Event):void
+            {
+                updateButtons();
+            }
+
+            private function updateButtons():void
+            {
+                addFolderBtnEnabled = ((filesGrid.selectedIndex > -1) && (filesGrid.selectedItem is Folder));
+                addDocumentBtnEnabled = ((filesGrid.selectedIndex > -1) && (filesGrid.selectedItem is Folder));
+            }
+
+            private function addFolder():void
+            {
+                var parent:Folder = filesGrid.selectedItem as Folder;
+                var folder:Folder = new Folder();
+                parent.addChild(folder);
+                filesGrid.invalidateList();
+                filesGrid.expandItem(parent, true);
+                filesGrid.selectedItem = folder;
+                updateButtons();
+            }
+
+            private function addDocument():void
+            {
+                var parent:Folder = filesGrid.selectedItem as Folder;
+                var document:Document = new Document();
+                parent.addChild(document);
+                filesGrid.invalidateList();
+                filesGrid.expandItem(parent, true);
+                filesGrid.selectedItem = document;
+                updateButtons();
+            }
+
+            private function removeFile():void
+            {
+                var file:FileObject = filesGrid.selectedItem as FileObject;
+                removedItems.push(file.removeSelf());
+            }
+
+            private function removable(file:FileObject):Boolean
+            {
+                return (file && file.parent)? true : false;
+            }
+
+            private function moveFile(i:int):void
+            {
+                var file:FileObject = filesGrid.selectedItem as FileObject;
+                var idx:int = file.getIndex();
+                Folder(file.parent).children.removeItemAt(idx);
+                Folder(file.parent).children.addItemAt(file, idx + i);
+            }
+
+            private function movableUp(file:FileObject):Boolean
+            {
+                return (file && (file.getIndex() > 0))? true : false;
+            }
+
+            private function movableDown(file:FileObject):Boolean
+            {
+                return (file && (file.getIndex() < Folder(file.parent).children.length - 1))? true : false;
+            }
+
+            private function saveTree():void
+            {
+                em.save(filesRoot);
+                for each(var file:FileObject in removedItems)
+                {
+                    em.remove(file);
+                }
+                removedItems.length = 0;
+            }
+        ]]>
+    </mx:Script>
+
+    <mx:VBox width="100%" height="100%" horizontalAlign="center">
+        <mx:AdvancedDataGrid id="filesGrid"
+            width="100%" height="100%"
+            editable="true">
+            <mx:columns>
+                <mx:AdvancedDataGridColumn dataField="name" headerText="Name"/>
+            </mx:columns>
+        </mx:AdvancedDataGrid>
+
+        <mx:HBox>
+            <mx:Button label="Add Folder" click="addFolder()" enabled="{addFolderBtnEnabled}"/>
+            <mx:Button label="Add Document" click="addDocument()" enabled="{addDocumentBtnEnabled}"/>
+            <mx:Button label="Remove" click="removeFile()" enabled="{removable(filesGrid.selectedItem as FileObject)}"/>
+            <mx:Button label="Move Up" click="moveFile(-1)" enabled="{movableUp(filesGrid.selectedItem as FileObject)}"/>
+            <mx:Button label="Move Down" click="moveFile(1)" enabled="{movableDown(filesGrid.selectedItem as FileObject)}"/>
+            <mx:Button label="Save" click="saveTree()"/>
+            <mx:Button label="Reset" click="loadData()"/>
+        </mx:HBox>
+
+        <mx:Spacer height="10"/>
+
+    </mx:VBox>
+
+</mx:WindowedApplication>

@@ -41,11 +41,16 @@
 
             public function tearDown():void
             {
-                em.sqlConnection.addEventListener(SQLEvent.CLOSE, function(event:SQLEvent):void
-                {
-                    dbFile.deleteFile();
-                });
-                em.sqlConnection.close();
+                em.closeAsyncConnection(new mx.rpc.Responder(
+                    function(event:SQLEvent):void
+                    {
+                        em.deleteDBFile();
+                    },
+                    function(error:SQLErrorEvent):void
+                    {
+                        trace(error);
+                    }
+                ));
             }
         ]]>
     </mx:Script>

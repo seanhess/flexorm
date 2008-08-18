@@ -4,6 +4,7 @@
     creationComplete="loadData()">
     <mx:Script>
         <![CDATA[
+            import nz.co.codec.flexorm.criteria.Criteria;
             import mx.collections.HierarchicalData;
             import mx.collections.ArrayCollection;
             import nz.co.codec.flexorm.EntityManager;
@@ -19,19 +20,12 @@
             {
                 em.debugLevel = 1;
                 em.openSyncConnection("tree-test.db");
-                var tasks:ArrayCollection = em.findAll(Task);
-                for each(var task:Task in tasks)
-                {
-                    if (task.parent == null)
-                    {
-                        tasksRoot = task;
-                        break;
-                    }
-                }
+                var crit:Criteria = em.createCriteria(Task);
+                crit.addNullCondition("parent");
+                tasksRoot = em.fetchCriteriaUniq(crit) as Task;
                 if (tasksRoot == null)
-                {
                     tasksRoot = new Task();
-                }
+
                 tasksGrid.dataProvider = new HierarchicalData(tasksRoot);
             }
 /*
@@ -50,6 +44,7 @@
                 var parent:Task = tasksGrid.selectedItem as Task;
                 parent.addChild(new Task());
                 tasksGrid.invalidateList();
+                tasksGrid.expandItem(parent, true);
             }
 
             private function removeTask():void

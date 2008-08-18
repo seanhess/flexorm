@@ -7,7 +7,7 @@ package ormtest
     import mx.collections.IList;
     import mx.rpc.Responder;
 
-    import nz.co.codec.flexorm.EntityError;
+    import nz.co.codec.flexorm.EntityErrorEvent;
     import nz.co.codec.flexorm.EntityEvent;
     import nz.co.codec.flexorm.EntityManagerAsync;
 
@@ -43,7 +43,6 @@ package ormtest
             ts.addTest(new EntityManagerAsyncTest("testTransaction"));
             ts.addTest(new EntityManagerAsyncTest("testCompositeKey"));
             ts.addTest(new EntityManagerAsyncTest("testCompositeKeyOneToMany"));
-            ts.addTest(new EntityManagerAsyncTest("testAlternateAPI"));
             ts.addTest(new EntityManagerAsyncTest("testOneToManyIndexedCollection"));
             ts.addTest(new EntityManagerAsyncTest("testManyToManyIndexedCollection"));
             return ts;
@@ -59,16 +58,17 @@ package ormtest
             trace("\nTest Null Find All");
             trace("==================");
             em.findAll(Organisation, new Responder(
-                addAsync(function(event:EntityEvent):void
+
+                addAsync(function(ev:EntityEvent):void
                 {
                     trace("findAll fired...");
-                    assertNull(event.data);
+                    assertEquals(ev.data.length, 0);
                 }, 1500),
 
-                function(error:EntityError):void
+                function(e:EntityErrorEvent):void
                 {
-                    trace("Failed in select: " + error.message);
-                    trace(error.getStackTrace());
+                    trace("Failed in select: " + e.message);
+                    trace(e.getStackTrace());
                 }
             ));
         }
@@ -80,28 +80,30 @@ package ormtest
             var organisation:Organisation = new Organisation();
             organisation.name = "Codec Software Limited";
             em.save(organisation, new Responder(
-                addAsync(function(event:EntityEvent):void
+
+                addAsync(function(ev:EntityEvent):void
                 {
                     trace("save fired...");
-                    em.load(Organisation, Organisation(event.data).id, new Responder(
-                        addAsync(function(event:EntityEvent):void
+                    em.load(Organisation, Organisation(ev.data).id, new Responder(
+
+                        addAsync(function(ev:EntityEvent):void
                         {
                             trace("load fired...");
-                            assertEquals(event.data.name, "Codec Software Limited");
+                            assertEquals(ev.data.name, "Codec Software Limited");
                         }, 1500),
 
-                        function(error:EntityError):void
+                        function(e:EntityErrorEvent):void
                         {
-                            trace("Failed in load: " + error.message);
-                            trace(error.getStackTrace());
+                            trace("Failed in load: " + e.message);
+                            trace(e.getStackTrace());
                         }
                     ));
                 }, 1500),
 
-                function(error:EntityError):void
+                function(e:EntityErrorEvent):void
                 {
-                    trace("Failed in save: " + error.message);
-                    trace(error.getStackTrace());
+                    trace("Failed in save: " + e.message);
+                    trace(e.getStackTrace());
                 }
             ));
         }
@@ -113,28 +115,30 @@ package ormtest
             var organisation:Organisation = new Organisation();
             organisation.name = "Adobe";
             em.save(organisation, new Responder(
-                addAsync(function(event:EntityEvent):void
+
+                addAsync(function(ev:EntityEvent):void
                 {
                     trace("save fired...");
                     em.findAll(Organisation, new Responder(
-                        addAsync(function(event:EntityEvent):void
+
+                        addAsync(function(ev:EntityEvent):void
                         {
                             trace("findAll fired...");
-                            assertEquals(event.data.length, 2);
+                            assertEquals(ev.data.length, 2);
                         }, 1500),
 
-                        function(error:EntityError):void
+                        function(e:EntityErrorEvent):void
                         {
-                            trace("Failed in select: " + error.message);
-                            trace(error.getStackTrace());
+                            trace("Failed in select: " + e.message);
+                            trace(e.getStackTrace());
                         }
                     ));
                 }, 1500),
 
-                function(error:EntityError):void
+                function(e:EntityErrorEvent):void
                 {
-                    trace("Failed in save: " + error.message);
-                    trace(error.getStackTrace());
+                    trace("Failed in save: " + e.message);
+                    trace(e.getStackTrace());
                 }
             ));
         }
@@ -154,7 +158,8 @@ package ormtest
             jamesOrders.addItem(desk);
             james.orders = jamesOrders;
             em.save(james, new Responder(
-                addAsync(function(event:EntityEvent):void
+
+                addAsync(function(ev:EntityEvent):void
                 {
                     trace("save james fired...");
                     var john:Contact = new Contact();
@@ -168,36 +173,38 @@ package ormtest
                     johnRoles.addItem(tester);
                     john.roles = johnRoles;
                     em.save(john, new Responder(
-                        addAsync(function(event:EntityEvent):void
+
+                        addAsync(function(ev:EntityEvent):void
                         {
                             trace("save john fired...");
                             em.findAll(Contact, new Responder(
-                                addAsync(function(event:EntityEvent):void
+
+                                addAsync(function(ev:EntityEvent):void
                                 {
                                     trace("findAll fired...");
-                                    assertEquals(event.data.length, 2);
+                                    assertEquals(ev.data.length, 2);
                                 }, 1500),
 
-                                function(error:EntityError):void
+                                function(e:EntityErrorEvent):void
                                 {
-                                    trace("Failed in select: " + error.message);
-                                    trace(error.getStackTrace());
+                                    trace("Failed in select: " + e.message);
+                                    trace(e.getStackTrace());
                                 }
                             ));
                         }, 1500),
 
-                        function(error:EntityError):void
+                        function(e:EntityErrorEvent):void
                         {
-                            trace(error);
+                            trace(e);
                         }
 
                     ));
                 }, 1500),
 
-                function(error:EntityError):void
+                function(e:EntityErrorEvent):void
                 {
-                    trace("Failed in save: " + error.message);
-                    trace(error.getStackTrace());
+                    trace("Failed in save: " + e.message);
+                    trace(e.getStackTrace());
                 }
             ));
         }
@@ -210,46 +217,49 @@ package ormtest
             organisation.name = "Apple";
             // since Organisation has cascade="none" on Contact
             em.save(organisation, new Responder(
-                addAsync(function(event:EntityEvent):void
+
+                addAsync(function(ev:EntityEvent):void
                 {
                     trace("save Organisation fired...");
                     var contact:Contact = new Contact();
                     contact.name = "Steve";
-                    contact.organisation = event.data as Organisation;
+                    contact.organisation = ev.data as Organisation;
                     em.save(contact, new Responder(
-                        addAsync(function(event:EntityEvent):void
+
+                        addAsync(function(ev:EntityEvent):void
                         {
                             trace("save Contact fired...");
-                            em.load(Contact, Contact(event.data).id, new Responder(
-                                addAsync(function(event:EntityEvent):void
+                            em.load(Contact, Contact(ev.data).id, new Responder(
+
+                                addAsync(function(ev:EntityEvent):void
                                 {
                                     trace("load fired...");
-                                    var loadedContact:Contact = event.data as Contact;
+                                    var loadedContact:Contact = ev.data as Contact;
                                     assertNotNull(loadedContact);
                                     assertNotNull(loadedContact.organisation);
                                     assertEquals(loadedContact.organisation.name, "Apple");
                                 }, 1500),
 
-                                function(error:EntityError):void
+                                function(e:EntityErrorEvent):void
                                 {
-                                    trace("Failed in load: " + error);
-                                    trace(error.getStackTrace());
+                                    trace("Failed in load: " + e);
+                                    trace(e.getStackTrace());
                                 }
                             ));
                         }, 1500),
 
-                        function(error:EntityError):void
+                        function(e:EntityErrorEvent):void
                         {
-                            trace("Failed in save Contact: " + error);
-                            trace(error.getStackTrace());
+                            trace("Failed in save Contact: " + e);
+                            trace(e.getStackTrace());
                         }
                     ));
                 }, 1500),
 
-                function(error:EntityError):void
+                function(e:EntityErrorEvent):void
                 {
-                    trace("Failed in save Organisation: " + error);
-                    trace(error.getStackTrace());
+                    trace("Failed in save Organisation: " + e);
+                    trace(e.getStackTrace());
                 }
             ));
         }
@@ -273,29 +283,31 @@ package ormtest
             contact.name = "Greg";
             contact.orders = orders;
             em.save(contact, new Responder(
-                addAsync(function(event:EntityEvent):void
+
+                addAsync(function(ev:EntityEvent):void
                 {
                     trace("save fired...");
-                    em.load(Contact, event.data.id, new Responder(
-                        addAsync(function(event:EntityEvent):void
+                    em.load(Contact, ev.data.id, new Responder(
+
+                        addAsync(function(ev:EntityEvent):void
                         {
                             trace("load fired...");
-                            var loadedContact:Contact = event.data as Contact;
+                            var loadedContact:Contact = ev.data as Contact;
                             assertEquals(loadedContact.orders.length, 2);
                         }, 1500),
 
-                        function(error:EntityError):void
+                        function(e:EntityErrorEvent):void
                         {
-                            trace("Failed in load: " + error);
-                            trace(error.getStackTrace());
+                            trace("Failed in load: " + e);
+                            trace(e.getStackTrace());
                         }
                     ));
                 }, 1500),
 
-                function(error:EntityError):void
+                function(e:EntityErrorEvent):void
                 {
-                    trace("Failed in save: " + error);
-                    trace(error.getStackTrace());
+                    trace("Failed in save: " + e);
+                    trace(e.getStackTrace());
                 }
             ));
         }
@@ -319,25 +331,27 @@ package ormtest
             contact.name = "Shannon";
             contact.roles = roles;
             em.save(contact, new Responder(
-                function(event:EntityEvent):void
-                {
-                    em.load(Contact, Contact(event.data).id, new Responder(
-                        function(event:EntityEvent):void
-                        {
-                            var loadedContact:Contact = event.data as Contact;
-                            assertEquals(loadedContact.roles.length, 2);
-                        },
 
-                        function(error:EntityError):void
+                addAsync(function(ev:EntityEvent):void
+                {
+                    em.load(Contact, Contact(ev.data).id, new Responder(
+
+                        addAsync(function(ev:EntityEvent):void
                         {
-                            throw error;
+                            var loadedContact:Contact = ev.data as Contact;
+                            assertEquals(loadedContact.roles.length, 2);
+                        }, 1500),
+
+                        function(e:EntityErrorEvent):void
+                        {
+                            throw e;
                         }
                     ));
-                },
+                }, 1500),
 
-                function(error:EntityError):void
+                function(e:EntityErrorEvent):void
                 {
-                    throw error;
+                    throw e;
                 }
             ));
         }
@@ -349,34 +363,37 @@ package ormtest
             var organisation:Organisation = new Organisation();
             organisation.name = "Datacom";
             em.save(organisation, new Responder(
-                function(event:EntityEvent):void
+
+                addAsync(function(ev:EntityEvent):void
                 {
-                    em.remove(event.data as Organisation, new Responder(
-                        function(event:EntityEvent):void
+                    em.remove(ev.data as Organisation, new Responder(
+
+                        addAsync(function(ev:EntityEvent):void
                         {
                             em.load(Organisation, organisation.id, new Responder(
-                                function(event:EntityEvent):void
-                                {
-                                    assertNull(event.data);
-                                },
 
-                                function(error:EntityError):void
+                                addAsync(function(ev:EntityEvent):void
                                 {
-                                    assertNotNull(error);
+                                    assertNull(ev.data);
+                                }, 1500),
+
+                                function(e:EntityErrorEvent):void
+                                {
+                                    assertNotNull(e);
                                 }
                             ));
-                        },
+                        }, 1500),
 
-                        function(error:EntityError):void
+                        function(e:EntityErrorEvent):void
                         {
-                            throw error;
+                            throw e;
                         }
                     ));
-                },
+                }, 1500),
 
-                function(error:EntityError):void
+                function(e:EntityErrorEvent):void
                 {
-                    throw error;
+                    throw e;
                 }
             ));
         }
@@ -400,45 +417,48 @@ package ormtest
             contact.name = "Jen";
             contact.orders = orders; // cascade="save-update"
             em.save(contact, new Responder(
-                function(event:EntityEvent):void
+
+                addAsync(function(ev:EntityEvent):void
                 {
-                    var savedContact:Contact = event.data as Contact;
+                    var savedContact:Contact = ev.data as Contact;
                     var orderId:int = savedContact.orders[0].id;
 
                     // verify that cascade save-update works
                     assertTrue(orderId > 0);
 
                     em.remove(contact, new Responder(
-                        function(event:EntityEvent):void
+
+                        addAsync(function(ev:EntityEvent):void
                         {
                             // verify that cascade delete is not in effect
 
                             // !!! Yes, but foreign key constraint violation is
                             // so FK constraint has been switched off using constrain="false"
                             em.load(Order, orderId, new Responder(
-                                function(event:EntityEvent):void
-                                {
-                                    var loadedOrder:Order = event.data as Order;
-                                    assertEquals(loadedOrder.item, "BMW");
-                                },
 
-                                function(error:EntityError):void
+                                addAsync(function(ev:EntityEvent):void
                                 {
-                                    throw error;
+                                    var loadedOrder:Order = ev.data as Order;
+                                    assertEquals(loadedOrder.item, "BMW");
+                                }, 1500),
+
+                                function(e:EntityErrorEvent):void
+                                {
+                                    throw e;
                                 }
                             ));
-                        },
+                        }, 1500),
 
-                        function(error:EntityError):void
+                        function(e:EntityErrorEvent):void
                         {
-                            throw error;
+                            throw e;
                         }
                     ));
-                },
+                }, 1500),
 
-                function(error:EntityError):void
+                function(e:EntityErrorEvent):void
                 {
-                    throw error;
+                    throw e;
                 }
             ));
         }
@@ -450,25 +470,27 @@ package ormtest
             var person:Person = new Person();
             person.emailAddr = "person@acme.com";
             em.save(person, new Responder(
-                function(event:EntityEvent):void
-                {
-                    em.load(Person, Person(event.data).id, new Responder(
-                        function(event:EntityEvent):void
-                        {
-                            var loadedPerson:Person = event.data as Person;
-                            assertEquals(loadedPerson.emailAddr, "person@acme.com");
-                        },
 
-                        function(error:EntityError):void
+                addAsync(function(ev:EntityEvent):void
+                {
+                    em.load(Person, Person(ev.data).id, new Responder(
+
+                        addAsync(function(ev:EntityEvent):void
                         {
-                            throw error;
+                            var loadedPerson:Person = ev.data as Person;
+                            assertEquals(loadedPerson.emailAddr, "person@acme.com");
+                        }, 1500),
+
+                        function(e:EntityErrorEvent):void
+                        {
+                            throw e;
                         }
                     ));
-                },
+                }, 1500),
 
-                function(error:EntityError):void
+                function(e:EntityErrorEvent):void
                 {
-                    throw error;
+                    throw e;
                 }
             ));
         }
@@ -481,37 +503,57 @@ package ormtest
             contact.name = "Bill";
             contact.emailAddr = "bill@ms.com";
             em.save(contact, new Responder(
-                function(event:EntityEvent):void
+
+                addAsync(function(ev:EntityEvent):void
                 {
-                    em.load(Contact, Contact(event.data).id, new Responder(
-                        function(event:EntityEvent):void
+                    em.load(Contact, Contact(ev.data).id, new Responder(
+
+                        addAsync(function(ev:EntityEvent):void
                         {
-                            var loadedContact:Contact = event.data as Contact;
+                            var loadedContact:Contact = ev.data as Contact;
                             assertEquals(loadedContact.emailAddr, "bill@ms.com");
-                        },
 
-                        function(error:EntityError):void
+                            em.load(Person, loadedContact.id, new Responder(
+
+                                addAsync(function(ev:EntityEvent):void
+                                {
+                                    var loadedPerson:Person = ev.data as Person;
+                                    assertEquals(loadedPerson.emailAddr, "bill@ms.com");
+                                }, 1500),
+
+                                function(e:EntityErrorEvent):void
+                                {
+                                    trace(e.message)
+                                    trace(e.getStackTrace());
+                                }
+                            ));
+                        }, 1500),
+
+                        function(e:EntityErrorEvent):void
                         {
-                            throw error;
+                            throw e;
                         }
                     ));
-                    em.load(Person, Person(event.data).id, new Responder(
-                        function(event:EntityEvent):void
-                        {
-                            var loadedPerson:Person = event.data as Person;
-                            assertEquals(loadedPerson.emailAddr, "bill@ms.com");
-                        },
 
-                        function(error:EntityError):void
-                        {
-                            throw error;
-                        }
-                    ));
-                },
+//                    em.load(Person, Person(ev.data).id, new Responder(
+//
+//                        addAsync(function(ev:EntityEvent):void
+//                        {
+//                            var loadedPerson:Person = ev.data as Person;
+//                            assertEquals(loadedPerson.emailAddr, "bill@ms.com");
+//                        }, 1500),
+//
+//                        function(e:EntityError):void
+//                        {
+//                            trace(e.message)
+//                            trace(e.getStackTrace());
+//                        }
+//                    ));
+                }, 1500),
 
-                function(error:EntityError):void
+                function(e:EntityErrorEvent):void
                 {
-                    throw error;
+                    throw e;
                 }
             ));
         }
@@ -523,68 +565,78 @@ package ormtest
             var organisation:Organisation = new Organisation();
             organisation.name = "Google";
             em.save(organisation, new Responder(
-                function(event:EntityEvent):void
+
+                addAsync(function(ev:EntityEvent):void
                 {
                     var contact:Contact = new Contact();
                     contact.name = "Sergey";
                     contact.organisation = organisation;
                     em.save(contact, new Responder(
-                        function(event:EntityEvent):void
+
+                        addAsync(function(ev:EntityEvent):void
                         {
                             em.startTransaction(new Responder(
-                                function(event:EntityEvent):void
+
+                                addAsync(function(ev:EntityEvent):void
                                 {
                                     trace("successful transaction start");
                                     em.remove(organisation, new Responder(
-                                        function(event:EntityEvent):void
+
+                                        function(ev:EntityEvent):void
                                         {
+                                            // Won't reach here - see below.
                                             em.endTransaction(new Responder(
-                                                function(event:EntityEvent):void
+
+                                                function(ev:EntityEvent):void
                                                 {
                                                     trace("transaction commit successful?");
                                                 },
 
-                                                function(error:EntityError):void
+                                                function(e:EntityErrorEvent):void
                                                 {
-                                                    trace("transaction commit failed: " + error);
+                                                    trace("transaction commit failed: " + e);
 
                                                     // The transaction is expected to fail with a
                                                     // foreign key constraint violation
-                                                    assertNotNull(error);
+                                                    assertNotNull(e);
                                                 }
                                             ));
                                         },
 
-                                        function(error:EntityError):void
+                                        addAsync(function(e:EntityErrorEvent):void
                                         {
                                             // TODO the remove operation is failing and responding
+                                            // before commit is called. Need to check if the
+                                            // sqlConnection is staying in transaction.
+
+                                            // No it is not!
+                                            // The FK constraint triggers will end the transaction
                                             // before commit is called.
-                                            // Need to check in the sqlConnection is staying in
-                                            // transaction.
 
-                                            trace("remove operation failed: " + error);
-                                        }
+                                            trace("remove operation failed: " + e);
+                                            assertNotNull(e);
+                                        }, 1500)
                                     ));
-                                },
+                                }, 1500),
 
-                                function(error:EntityError):void
+                                function(e:EntityErrorEvent):void
                                 {
-                                    trace("transaction start failed: " + error);
+                                    trace("transaction start failed: " + e);
                                 }
                             ));
-                        },
+                        }, 1500),
 
-                        function(error:EntityError):void
+                        function(e:EntityErrorEvent):void
                         {
                             trace("save operation failed");
                         }
                     ));
 
-                },
+                }, 1500),
 
-                function(error:EntityError):void
+                function(e:EntityErrorEvent):void
                 {
-                    throw error;
+                    throw e;
                 }
             ));
         }
@@ -610,56 +662,64 @@ package ormtest
             var student:Student = new Student();
             student.name = "Mark";
             em.save(student, new Responder(
-                function(event:EntityEvent):void
+
+                addAsync(function(ev:EntityEvent):void
                 {
-                    var stud:Student = event.data as Student;
+                    var stud:Student = ev.data as Student;
                     trace("saved Student: " + stud.id + " " + stud.name);
                     var lesson:Lesson = new Lesson();
                     lesson.name = "Piano";
                     em.save(lesson, new Responder(
-                        function(event:EntityEvent):void
+
+                        addAsync(function(ev:EntityEvent):void
                         {
                             var schedule:Schedule = new Schedule();
                             schedule.student = stud;
-                            schedule.lesson = event.data as Lesson;
+                            schedule.lesson = ev.data as Lesson;
                             trace("saved Lesson: " + schedule.lesson.id + " " + schedule.lesson.name);
                             var today:Date = new Date();
                             schedule.lessonDate = today;
                             em.save(schedule, new Responder(
-                                function(event:EntityEvent):void
+
+                                addAsync(function(ev:EntityEvent):void
                                 {
-                                    var sched:Schedule = event.data as Schedule;
+                                    var sched:Schedule = ev.data as Schedule;
                                     trace("saved Schedule: " + sched.lessonDate);
                                     em.loadItemByCompositeKey(Schedule, [sched.student, sched.lesson], new Responder(
-                                        function(event:EntityEvent):void
+
+                                        addAsync(function(ev:EntityEvent):void
                                         {
-                                            var loadedSchedule:Schedule = event.data as Schedule;
+                                            var loadedSchedule:Schedule = ev.data as Schedule;
                                             trace("loaded Schedule: " + loadedSchedule.lessonDate);
                                             assertEquals(loadedSchedule.lessonDate.fullYear, today.fullYear);
                                             assertEquals(loadedSchedule.lessonDate.month, today.month);
                                             assertEquals(loadedSchedule.lessonDate.date, today.date);
-                                        },
-                                        function(error:EntityError):void
+                                        }, 1500),
+
+                                        function(e:EntityErrorEvent):void
                                         {
-                                            throw error;
+                                            throw e;
                                         }
                                     ));
-                                },
-                                function(error:EntityError):void
+                                }, 1500),
+
+                                function(e:EntityErrorEvent):void
                                 {
-                                    throw error;
+                                    throw e;
                                 }
                             ));
-                        },
-                        function(error:EntityError):void
+                        }, 1500),
+
+                        function(e:EntityErrorEvent):void
                         {
-                            throw error;
+                            throw e;
                         }
                     ));
-                },
-                function(error:EntityError):void
+                }, 1500),
+
+                function(e:EntityErrorEvent):void
                 {
-                    throw error;
+                    throw e;
                 }
             ));
         }
@@ -671,18 +731,20 @@ package ormtest
             var student:Student = new Student();
             student.name = "Shannon";
             em.save(student, new Responder(
-                function(event:EntityEvent):void
+
+                addAsync(function(ev:EntityEvent):void
                 {
-                    var stud:Student = event.data as Student;
+                    var stud:Student = ev.data as Student;
                     trace("saved Student: " + stud.id + " " + stud.name);
                     var lesson:Lesson = new Lesson();
                     lesson.name = "Viola";
                     em.save(lesson, new Responder(
-                        function(event:EntityEvent):void
+
+                        addAsync(function(ev:EntityEvent):void
                         {
                             var schedule:Schedule = new Schedule();
                             schedule.student = stud;
-                            schedule.lesson = event.data as Lesson;
+                            schedule.lesson = ev.data as Lesson;
                             trace("saved Lesson: " + schedule.lesson.id + " " + schedule.lesson.name);
                             var today:Date = new Date();
                             schedule.lessonDate = today;
@@ -699,38 +761,44 @@ package ormtest
                             schedule.resources = resources;
 
                             em.save(schedule, new Responder(
-                                function(event:EntityEvent):void
+
+                                addAsync(function(ev:EntityEvent):void
                                 {
-                                    var sched:Schedule = event.data as Schedule;
+                                    var sched:Schedule = ev.data as Schedule;
                                     trace("saved Schedule: " + sched.lessonDate);
                                     em.loadItemByCompositeKey(Schedule, [sched.student, sched.lesson], new Responder(
-                                        function(event:EntityEvent):void
+
+                                        addAsync(function(ev:EntityEvent):void
                                         {
-                                            var loadedSchedule:Schedule = event.data as Schedule;
+                                            var loadedSchedule:Schedule = ev.data as Schedule;
                                             trace("loaded Schedule: " + loadedSchedule.lessonDate);
                                             assertEquals(loadedSchedule.resources.length, 2);
-                                        },
-                                        function(error:EntityError):void
+                                        }, 1500),
+
+                                        function(e:EntityErrorEvent):void
                                         {
-                                            throw error;
+                                            throw e;
                                         }
                                     ));
-                                },
-                                function(error:EntityError):void
+                                }, 1500),
+
+                                function(e:EntityErrorEvent):void
                                 {
-                                    throw error;
+                                    throw e;
                                 }
                             ));
-                        },
-                        function(error:EntityError):void
+                        }, 1500),
+
+                        function(e:EntityErrorEvent):void
                         {
-                            throw error;
+                            throw e;
                         }
                     ));
-                },
-                function(error:EntityError):void
+                }, 1500),
+
+                function(e:EntityErrorEvent):void
                 {
-                    throw error;
+                    throw e;
                 }
             ));
         }
@@ -754,50 +822,59 @@ package ormtest
             contact.name = "Mark";
             contact.orders = orders;
             em.save(contact, new Responder(
-                function(event:EntityEvent):void
+
+                addAsync(function(ev:EntityEvent):void
                 {
                     trace("saved contact");
-                    em.load(Contact, event.data.id, new Responder(
-                        function(event:EntityEvent):void
+                    em.load(Contact, ev.data.id, new Responder(
+
+                        addAsync(function(ev:EntityEvent):void
                         {
                             trace("loaded contact");
-                            var loadedContact:Contact = event.data as Contact;
+                            var loadedContact:Contact = ev.data as Contact;
                             assertEquals(loadedContact.orders[1].item, "iPhone");
 
                             var ordersList:IList = loadedContact.orders;
                             ordersList.addItemAt(ordersList.removeItemAt(1), 0);
                             em.save(loadedContact, new Responder(
-                                function(event:EntityEvent):void
+
+                                addAsync(function(ev:EntityEvent):void
                                 {
                                     trace("saved contact with reordered orders collection");
                                     em.load(Contact, contact.id, new Responder(
-                                        function(event:EntityEvent):void
+
+                                        addAsync(function(ev:EntityEvent):void
                                         {
                                             trace("reloaded contact");
-                                            var reloadedContact:Contact = event.data as Contact;
+                                            var reloadedContact:Contact = ev.data as Contact;
                                             assertEquals(reloadedContact.orders[1].item, "Macbook");
-                                        },
-                                        function(error:EntityError):void
+                                        }, 1500),
+
+                                        function(e:EntityErrorEvent):void
                                         {
-                                            throw error;
+                                            throw e;
                                         }
                                     ));
-                                },
-                                function(error:EntityError):void
+                                }, 1500),
+
+                                function(e:EntityErrorEvent):void
                                 {
-                                    throw error;
+                                    trace(e.message);
+                                    throw e;
                                 }
                             ));
-                        },
-                        function(error:EntityError):void
+                        }, 1500),
+
+                        function(e:EntityErrorEvent):void
                         {
-                            throw error;
+                            throw e;
                         }
                     ));
-                },
-                function(error:EntityError):void
+                }, 1500),
+
+                function(e:EntityErrorEvent):void
                 {
-                    throw error;
+                    throw e;
                 }
             ));
         }
@@ -821,50 +898,58 @@ package ormtest
             contact.name = "John";
             contact.roles = roles;
             em.save(contact, new Responder(
-                function(event:EntityEvent):void
+
+                addAsync(function(ev:EntityEvent):void
                 {
                     trace("saved contact");
-                    em.load(Contact, event.data.id, new Responder(
-                        function(event:EntityEvent):void
+                    em.load(Contact, ev.data.id, new Responder(
+
+                        addAsync(function(ev:EntityEvent):void
                         {
                             trace("loaded contact");
-                            var loadedContact:Contact = event.data as Contact;
+                            var loadedContact:Contact = ev.data as Contact;
                             assertEquals(loadedContact.roles[1].name, "Sparky");
 
                             var roleList:IList = loadedContact.roles;
                             roleList.addItemAt(roleList.removeItemAt(1), 0);
                             em.save(loadedContact, new Responder(
-                                function(event:EntityEvent):void
+
+                                addAsync(function(ev:EntityEvent):void
                                 {
                                     trace("saved contact with reordered roles collection");
-                                    em.load(Contact, event.data.id, new Responder(
-                                        function(event:EntityEvent):void
+                                    em.load(Contact, ev.data.id, new Responder(
+
+                                        addAsync(function(ev:EntityEvent):void
                                         {
-                                            var reloadedContact:Contact = event.data as Contact;
+                                            var reloadedContact:Contact = ev.data as Contact;
                                             trace("reloaded contact");
                                             assertEquals(reloadedContact.roles[1].name, "Carpenter");
-                                        },
-                                        function(error:EntityError):void
+                                        }, 1500),
+
+                                        function(e:EntityErrorEvent):void
                                         {
-                                            throw error;
+                                            throw e;
                                         }
                                     ));
-                                },
-                                function(error:EntityError):void
+                                }, 1500),
+
+                                function(e:EntityErrorEvent):void
                                 {
-                                    throw error;
+                                    throw e;
                                 }
                             ));
-                        },
-                        function(error:EntityError):void
+                        }, 1500),
+
+                        function(e:EntityErrorEvent):void
                         {
-                            throw error;
+                            throw e;
                         }
                     ));
-                },
-                function(error:EntityError):void
+                }, 1500),
+
+                function(e:EntityErrorEvent):void
                 {
-                    throw error;
+                    throw e;
                 }
             ));
         }
