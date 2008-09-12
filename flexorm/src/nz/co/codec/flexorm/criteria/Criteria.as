@@ -1,30 +1,23 @@
 package nz.co.codec.flexorm.criteria
 {
-    import flash.data.SQLConnection;
-
-    import nz.co.codec.flexorm.command.SQLParameterisedCommand;
     import nz.co.codec.flexorm.metamodel.Entity;
 
-    public class Criteria extends SQLParameterisedCommand
+    public class Criteria
     {
         private var _entity:Entity;
 
-        private var _result:Array;
+        private var _filters:Array;
 
-        private var restrictions:Array;
+        private var _sorts:Array;
 
-        private var sorts:Array;
+        private var _params:Object;
 
-        public function Criteria(
-            sqlConnection:SQLConnection,
-            schema:String,
-            entity:Entity,
-            debugLevel:int=0)
+        public function Criteria(entity:Entity)
         {
-            super(sqlConnection, schema, entity.table, debugLevel);
             _entity = entity;
-            restrictions = [];
-            sorts = [];
+            _filters = [];
+            _sorts = [];
+            _params = {};
         }
 
         public function get entity():Entity
@@ -32,101 +25,117 @@ package nz.co.codec.flexorm.criteria
             return _entity;
         }
 
-        override protected function prepareStatement():void
+        public function get filters():Array
         {
-            var sql:String = "select ";
-            for (var column:String in _columns)
-            {
-                sql += "t." + column + ",";
-            }
-            sql = sql.substring(0, sql.length - 1); // remove last comma
-            sql += " from " + _schema + "." + _entity.table + " t";
-            sql += " where ";
-            for each(var restriction:Restriction in restrictions)
-            {
-                sql += restriction + " and ";
-            }
-            sql += "t.marked_for_deletion<>true";
-            if (sorts.length > 0)
-            {
-                sql += " order by ";
-                for each(var sort:Sort in sorts)
-                {
-                    sql += sort + " and ";
-                }
-                sql = sql.substring(0, sql.length - 5); // remove last ' and '
-            }
-
-            _statement.text = sql;
-            _changed = false;
+            return _filters;
         }
 
-        override public function execute():void
+        public function get sorts():Array
         {
-            super.execute();
-            if (_responder == null)
-                _result = _statement.getResult().data;
+            return _sorts;
         }
 
-        public function get result():Array
+        public function get params():Object
         {
-            return _result;
+            return _params;
         }
 
-        public function addSort(property:String, order:String):Criteria
+        public function addSort(property:String, order:String=null):Criteria
         {
-            var column:String = _entity.getColumn(property);
+            var column:Object = _entity.getColumn(property);
             if (column)
             {
-                sorts.push(new Sort(column, order));
+                _sorts.push(new Sort(column.table, column.column, order));
             }
-            _changed = true;
             return this;
+        }
+
+        public function createAndJunction():Junction
+        {
+            return Junction.and(_entity);
+        }
+
+        public function createOrJunction():Junction
+        {
+            return Junction.or(_entity);
         }
 
         public function addJunction(junction:Junction):Criteria
         {
-            restrictions.push(junction);
-            _changed = true;
+            _filters.push(junction);
+            return this;
+        }
+
+        public function addEqualsCondition(property:String, value:Object):Criteria
+        {
+            var column:Object = _entity.getColumn(property);
+            if (column)
+            {
+                _filters.push(new EqualsCondition(column.table, column.column, property));
+                _params[property] = value;
+            }
+            return this;
+        }
+
+        public function addNotEqualsCondition(property:String, value:Object):Criteria
+        {
+            var column:Object = _entity.getColumn(property);
+            if (column)
+            {
+                _filters.push(new NotEqualsCondition(column.table, column.column, property));
+                _params[property] = value;
+            }
+            return this;
+        }
+
+        public function addGreaterThanCondition(property:String, str:String):Criteria
+        {
+            var column:Object = _entity.getColumn(property);
+            if (column)
+            {
+                _filters.push(new GreaterThanCondition(column.table, column.column, str));
+            }
+            return this;
+        }
+
+        public function addLessThanCondition(property:String, str:String):Criteria
+        {
+            var column:Object = _entity.getColumn(property);
+            if (column)
+            {
+                _filters.push(new LessThanCondition(column.table, column.column, str));
+            }
             return this;
         }
 
         public function addLikeCondition(property:String, str:String):Criteria
         {
-            var column:String = _entity.getColumn(property);
+            var column:Object = _entity.getColumn(property);
             if (column)
             {
-                restrictions.push(new LikeCondition(column, str));
+                _filters.push(new LikeCondition(column.table, column.column, str));
             }
-            _changed = true;
             return this;
         }
 
         public function addNullCondition(property:String):Criteria
         {
-            var column:String = _entity.getColumn(property);
+            var column:Object = _entity.getColumn(property);
             if (column)
             {
-                restrictions.push(new NullCondition(column));
+                _filters.push(new NullCondition(column.table, column.column));
             }
-            _changed = true;
             return this;
         }
 
         public function addNotNullCondition(property:String):Criteria
         {
-            var column:String = _entity.getColumn(property);
+            var column:Object = _entity.getColumn(property);
             if (column)
             {
-                restrictions.push(new NotNullCondition(column));
+                _filters.push(new NotNullCondition(column.table, column.column));
             }
-            _changed = true;
             return this;
-        }
-
-        public function toString():String
-        {
-            return "SELECT BY CRITERIA " + _table + ": " + _statement.text;
         }
 
     }

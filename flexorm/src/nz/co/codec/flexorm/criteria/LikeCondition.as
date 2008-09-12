@@ -4,15 +4,15 @@ package nz.co.codec.flexorm.criteria
     {
         private var _str:String;
 
-        public function LikeCondition(column:String, str:String)
+        public function LikeCondition(table:String, column:String, str:String)
         {
-            super(column);
+            super(table, column);
             _str = str;
         }
 
         override public function toString():String
         {
-            return "t." + column + " like '%" + _str + "%'";
+            return column + " like '%" + _str + "%'";
         }
 
     }

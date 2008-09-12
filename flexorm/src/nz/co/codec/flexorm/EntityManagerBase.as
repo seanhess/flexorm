@@ -5,6 +5,8 @@ package nz.co.codec.flexorm
     import flash.utils.getDefinitionByName;
     import flash.utils.getQualifiedClassName;
 
+    import mx.collections.ArrayCollection;
+
     import nz.co.codec.flexorm.command.InsertCommand;
     import nz.co.codec.flexorm.command.SQLParameterisedCommand;
     import nz.co.codec.flexorm.command.UpdateCommand;
@@ -12,8 +14,8 @@ package nz.co.codec.flexorm
     import nz.co.codec.flexorm.metamodel.Entity;
     import nz.co.codec.flexorm.metamodel.Field;
     import nz.co.codec.flexorm.metamodel.Identity;
+    import nz.co.codec.flexorm.metamodel.PersistentEntity;
     import nz.co.codec.flexorm.util.Mixin;
-    import nz.co.codec.flexorm.util.PersistentEntity;
 
     public class EntityManagerBase
     {
@@ -29,23 +31,25 @@ package nz.co.codec.flexorm
 
         private var _debugLevel:int;
 
-        private var _opt:Object;
+        private var _options:Object;
 
         // A map of Entities using the Entity name as key
         private var _entityMap:Object;
 
         // Identity Map
-        public var cacheMap:Object;
+        private var cacheMap:Object;
+
+        private var cachedChildrenMap:Object;
 
         public function EntityManagerBase()
         {
             _schema = DEFAULT_SCHEMA;
-            _opt = {};
-            _opt.namingStrategy = NamingStrategy.UNDERSCORE_NAMES;
-            _opt.syncSupport = false;
+            _options = {};
+            _options.namingStrategy = NamingStrategy.UNDERSCORE_NAMES;
+            _options.syncSupport = false;
             _debugLevel = 0;
             _entityMap = {};
-            cacheMap = {};
+            clearCache();
         }
 
         public function get schema():String
@@ -56,7 +60,7 @@ package nz.co.codec.flexorm
         public function set sqlConnection(value:SQLConnection):void
         {
             _sqlConnection = value;
-            _introspector = new EntityIntrospector(_schema, value, entityMap, debugLevel, opt);
+            _introspector = new EntityIntrospector(_schema, value, _entityMap, _debugLevel, _options);
         }
 
         public function get sqlConnection():SQLConnection
@@ -98,22 +102,20 @@ package nz.co.codec.flexorm
          * - syncSupport:Boolean
          *
          */
-        public function set opt(value:Object):void
+        public function set options(value:Object):void
         {
-            _opt = value;
-            if (_opt.hasOwnProperty("schema"))
-                _schema = opt.schema;
+            if (value)
+            {
+                _options = value;
+                if (value.hasOwnProperty("schema"))
+                    _schema = value.schema;
+            }
         }
 
-        public function get opt():Object
+        public function get options():Object
         {
-            return _opt;
+            return _options;
         }
-
-//        public function set entityMap(value:Object):void
-//        {
-//            _entityMap = value;
-//        }
 
         public function get entityMap():Object
         {
@@ -131,7 +133,7 @@ package nz.co.codec.flexorm
 
         protected function getClass(obj:Object):Class
         {
-            return (obj is PersistentEntity)?
+            return (obj is PersistentEntity) ?
                 obj.__class :
                 Class(getDefinitionByName(getQualifiedClassName(obj)));
         }
@@ -158,8 +160,8 @@ package nz.co.codec.flexorm
             var map:Object = {};
             for each(var identity:Identity in entity.identities)
             {
-                var id:int = row[identity.column];
-                if (id == 0)
+                var id:* = row[identity.column];
+                if (id == 0 || id == null)
                     return null;
                 map[identity.fkProperty] = id;
             }
@@ -171,8 +173,8 @@ package nz.co.codec.flexorm
             var map:Object = {};
             for each(var identity:Identity in entity.identities)
             {
-                var id:int = row[identity.fkColumn];
-                if (id == 0)
+                var id:* = row[identity.fkColumn];
+                if (id == 0 || id == null)
                     return null;
                 map[identity.fkProperty] = id;
             }
@@ -284,7 +286,7 @@ package nz.co.codec.flexorm
             }
             else
             {
-                return getCachedValue(associatedEntity, { (associatedEntity.fkProperty): row[a.fkColumn] });
+                return getCachedValue(associatedEntity, getIdentityMap(associatedEntity.fkProperty, row[a.fkColumn]));
             }
         }
 
@@ -325,6 +327,18 @@ package nz.co.codec.flexorm
         protected function clearCache():void
         {
             cacheMap = {};
+            cachedChildrenMap = {};
+        }
+
+        protected function getCachedChildren(parentId:int):ArrayCollection
+        {
+            var coll:ArrayCollection = cachedChildrenMap[parentId];
+            if (coll == null)
+            {
+                coll = new ArrayCollection();
+                cachedChildrenMap[parentId] = coll;
+            }
+            return coll;
         }
 
         protected function isDynamicObject(obj:Object):Boolean

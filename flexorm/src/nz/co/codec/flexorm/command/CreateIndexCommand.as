@@ -2,6 +2,8 @@ package nz.co.codec.flexorm.command
 {
     import flash.data.SQLConnection;
 
+    import mx.utils.StringUtil;
+
     public class CreateIndexCommand extends SQLCommand
     {
         private var _name:String;
@@ -28,22 +30,20 @@ package nz.co.codec.flexorm.command
 
         override protected function prepareStatement():void
         {
-            var sql:String = "create index if not exists " + _schema + ".";
-            sql += _name ? _name : _table + "_" + indexColumns[0] + "_idx";
-            sql += " on " + _table + "(";
+            var sql:String = StringUtil.substitute("create index if not exists {0}.{1}_{2}_idx on {3}(",
+                    _schema, _name? _name : _table, indexColumns[0], _table);
             for each(var column:String in indexColumns)
             {
-                sql += column + " asc,";
+                sql += StringUtil.substitute("{0} asc,", column);
             }
-            sql = sql.substr(0, sql.length - 1); // remove last comma
-            sql += ")";
+            sql = sql.substr(0, sql.length - 1) + ")"; // remove last comma
             _statement.text = sql;
             _changed = false;
         }
 
         public function toString():String
         {
-            return "CREATE INDEX " + _statement.text;
+            return "INDEX " + _statement.text;
         }
 
     }

@@ -10,9 +10,11 @@ package nz.co.codec.flexorm.metamodel
 
         public var fkProperty:String;
 
+        public var strategy:String;
+
         public var path:Array;
 
-        public function getValue(obj:Object):int
+        public function getValue(obj:Object):*
         {
             if (obj == null)
                 return 0;
@@ -23,7 +25,7 @@ package nz.co.codec.flexorm.metamodel
             return getVal(obj, path.concat());
         }
 
-        private function getVal(obj:Object, path:Array):int
+        private function getVal(obj:Object, path:Array):*
         {
             var key:Key = path.shift() as Key;
             if (path.length > 0)

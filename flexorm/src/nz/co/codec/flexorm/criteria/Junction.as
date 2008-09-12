@@ -1,8 +1,10 @@
 package nz.co.codec.flexorm.criteria
 {
+    import mx.utils.StringUtil;
+
     import nz.co.codec.flexorm.metamodel.Entity;
 
-    public class Junction implements Restriction
+    public class Junction implements IFilter
     {
         public static const AND:String = " and ";
 
@@ -20,9 +22,9 @@ package nz.co.codec.flexorm.criteria
 
         private var _entity:Entity;
 
-        private var type:String;
+        private var _type:String;
 
-        private var restrictions:Array;
+        private var _filters:Array;
 
         public function Junction(entity:Entity, type:String=null)
         {
@@ -30,64 +32,71 @@ package nz.co.codec.flexorm.criteria
             switch (type)
             {
                 case OR:
-                    type = OR;
+                    _type = OR;
                     break;
 
                 default:
-                    type = AND;
+                    _type = AND;
             }
-            restrictions = [];
+            _filters = [];
         }
 
         public function addJunction(junction:Junction):Junction
         {
-            restrictions.push(junction);
+            _filters.push(junction);
             return this;
         }
 
         public function addLikeCondition(property:String, str:String):Junction
         {
-            var column:String = _entity.getColumn(property);
+            var column:Object = _entity.getColumn(property);
             if (column)
             {
-                restrictions.push(new LikeCondition(column, str));
+                _filters.push(new LikeCondition(column.table, column.column, str));
             }
             return this;
         }
 
         public function addNullCondition(property:String):Junction
         {
-            var column:String = _entity.getColumn(property);
+            var column:Object = _entity.getColumn(property);
             if (column)
             {
-                restrictions.push(new NullCondition(column));
+                _filters.push(new NullCondition(column.table, column.column));
             }
             return this;
         }
 
         public function addNotNullCondition(property:String):Junction
         {
-            var column:String = _entity.getColumn(property);
+            var column:Object = _entity.getColumn(property);
             if (column)
             {
-                restrictions.push(new NotNullCondition(column));
+                _filters.push(new NotNullCondition(column.table, column.column));
             }
             return this;
         }
 
-        public function toString():String
+        public function get filters():Array
+        {
+            return _filters;
+        }
+
+        public function getString(getTableIndex:Function):String
         {
             var sql:String = "";
-            var len:int = restrictions.length;
+            var len:int = _filters.length;
             if (len > 0)
             {
                 sql += "(";
                 var k:int = len - 1;
                 for (var i:int = 0; i < len; i++)
                 {
-                    sql += restrictions[i];
+                    sql += StringUtil.substitute("t{0}.{1}",
+                            getTableIndex.call(this, Condition(_filters[i]).table),
+                            _filters[i]);
                     if (i < k)
-                        sql += type;
+                        sql += _type;
                 }
                 sql += ")";
             }

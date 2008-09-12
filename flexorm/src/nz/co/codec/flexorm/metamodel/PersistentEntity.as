@@ -1,4 +1,4 @@
-package nz.co.codec.flexorm.util
+package nz.co.codec.flexorm.metamodel
 {
     import mx.collections.ArrayCollection;
 

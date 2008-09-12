@@ -16,9 +16,9 @@ package nz.co.codec.flexorm
 
         function get data():Object;
 
-        function set id(value:int):void;
+        function set id(value:*):void;
 
-        function get id():int;
+        function get id():*;
 
         function branchBlocking():BlockingExecutor;
 

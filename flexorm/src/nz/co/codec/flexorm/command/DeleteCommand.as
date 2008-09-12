@@ -2,6 +2,10 @@ package nz.co.codec.flexorm.command
 {
     import flash.data.SQLConnection;
 
+    import mx.utils.StringUtil;
+
+    import nz.co.codec.flexorm.criteria.IFilter;
+
     public class DeleteCommand extends SQLParameterisedCommand
     {
         public function DeleteCommand(
@@ -15,13 +19,13 @@ package nz.co.codec.flexorm.command
 
         override protected function prepareStatement():void
         {
-            var sql:String = "delete from " + _schema + "." + _table;
+            var sql:String = StringUtil.substitute("delete from {0}.{1}", _schema, _table);
             if (_filters)
             {
                 sql += " where ";
-                for (var filter:String in _filters)
+                for each(var filter:IFilter in _filters)
                 {
-                    sql += filter + "=" + _filters[filter] + " and ";
+                    sql += StringUtil.substitute("{0} and ", filter);
                 }
                 sql = sql.substring(0, sql.length - 5); // remove last ' and '
             }

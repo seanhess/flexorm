@@ -3,40 +3,54 @@ package nz.co.codec.flexorm.command
     import flash.data.SQLConnection;
 
     import mx.utils.ObjectUtil;
+    import mx.utils.StringUtil;
+
+    import nz.co.codec.flexorm.criteria.IFilter;
 
     public class UpdateCommand extends SQLParameterisedCommand
     {
+        private var _syncSupport:Boolean;
+
         public function UpdateCommand(
             sqlConnection:SQLConnection,
             schema:String,
             table:String,
+            syncSupport:Boolean=false,
             debugLevel:int=0)
         {
             super(sqlConnection, schema, table, debugLevel);
+            _syncSupport = syncSupport;
         }
 
         public function clone():UpdateCommand
         {
-            var copy:UpdateCommand = new UpdateCommand(_sqlConnection, _schema, _table, _debugLevel);
+            var copy:UpdateCommand = new UpdateCommand(_sqlConnection, _schema, _table, _syncSupport, _debugLevel);
             copy.columns = ObjectUtil.copy(_columns);
-            copy.filters = ObjectUtil.copy(_filters);
+            copy._filters = _filters.concat();
             return copy;
         }
 
         override protected function prepareStatement():void
         {
-            var sql:String = "update " + _schema + "." + _table + " set ";
+            var sql:String = StringUtil.substitute("update {0}.{1} set ", _schema, _table);
             for (var column:String in _columns)
             {
-                sql += column + "=" + _columns[column] + ",";
+                sql += StringUtil.substitute("{0}={1},", column, _columns[column]);
             }
-            sql = sql.substring(0, sql.length - 1);
+            if (_syncSupport && !_columns.hasOwnProperty("version"))
+            {
+                sql += "version=version+1";
+            }
+            else
+            {
+                sql = sql.substring(0, sql.length - 1);
+            }
             if (_filters)
             {
                 sql += " where ";
-                for (var filter:String in _filters)
+                for each(var filter:IFilter in _filters)
                 {
-                    sql += filter + "=" + _filters[filter] + " and ";
+                    sql += StringUtil.substitute("{0} and ", filter);
                 }
                 sql = sql.substring(0, sql.length - 5); // remove last ' and '
             }

@@ -4,9 +4,17 @@ package nz.co.codec.flexorm
 
     import mx.rpc.IResponder;
 
+    import nz.co.codec.flexorm.criteria.Criteria;
+
     public interface IEntityManagerAsync
     {
         function findAll(cls:Class, responder:IResponder):void;
+
+        function createCriteria(cls:Class, responder:IResponder):void;
+
+        function fetchCriteria(crit:Criteria, responder:IResponder):void;
+
+        function fetchCriteriaFirstResult(crit:Criteria, responder:IResponder):void;
 
         function load(cls:Class, id:int, responder:IResponder):void;
 

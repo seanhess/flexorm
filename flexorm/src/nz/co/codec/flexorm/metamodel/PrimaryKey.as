@@ -22,6 +22,8 @@ package nz.co.codec.flexorm.metamodel
             return _property;
         }
 
+        public var strategy:String;
+
         public function PrimaryKey(hash:Object=null)
         {
             for (var key:String in hash)

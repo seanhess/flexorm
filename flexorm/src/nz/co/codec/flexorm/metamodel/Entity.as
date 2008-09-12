@@ -3,27 +3,28 @@ package nz.co.codec.flexorm.metamodel
     import mx.core.IUID;
 
     import nz.co.codec.flexorm.command.CreateAsynCommand;
-    import nz.co.codec.flexorm.command.CreateSyncCommand;
+    import nz.co.codec.flexorm.command.CreateSynCommand;
     import nz.co.codec.flexorm.command.DeleteCommand;
-    import nz.co.codec.flexorm.command.FindAllCommand;
     import nz.co.codec.flexorm.command.InsertCommand;
-    import nz.co.codec.flexorm.command.MarkForDeletionCommand;
     import nz.co.codec.flexorm.command.SelectCommand;
-    import nz.co.codec.flexorm.command.SelectKeysCommand;
-    import nz.co.codec.flexorm.command.SelectServerKeyMapCommand;
-    import nz.co.codec.flexorm.command.SelectSubTypeCommand;
-    import nz.co.codec.flexorm.command.SelectUpdatedCommand;
+    import nz.co.codec.flexorm.command.SelectMaxRgtCommand;
+    import nz.co.codec.flexorm.command.SelectNestedSetTypesCommand;
     import nz.co.codec.flexorm.command.UpdateCommand;
-    import nz.co.codec.flexorm.command.UpdateVersionCommand;
-    import nz.co.codec.flexorm.criteria.Criteria;
+    import nz.co.codec.flexorm.command.UpdateNestedSetsCommand;
+    import nz.co.codec.flexorm.command.UpdateNestedSetsLeftBoundaryCommand;
+    import nz.co.codec.flexorm.command.UpdateNestedSetsRightBoundaryCommand;
 
     public class Entity implements IUID
     {
-        public var findAllCommand:FindAllCommand;
-
-        public var criteria:Criteria;
-
         public var selectCommand:SelectCommand;
+
+        public var selectAllCommand:SelectCommand;
+
+        public var selectSubtypeCommand:SelectCommand;
+
+        public var selectNestedSetsCommand:SelectCommand;
+
+        public var selectNestedSetTypesCommand:SelectNestedSetTypesCommand;
 
         public var insertCommand:InsertCommand;
 
@@ -31,27 +32,35 @@ package nz.co.codec.flexorm.metamodel
 
         public var deleteCommand:DeleteCommand;
 
-        public var markForDeletionCmd:MarkForDeletionCommand;
+        public var markForDeletionCommand:UpdateCommand;
 
-        public var createSyncCmd:CreateSyncCommand;
+        public var createSynCommand:CreateSynCommand;
 
-        public var createAsynCmd:CreateAsynCommand;
+        public var createAsynCommand:CreateAsynCommand;
 
-        public var selectSubTypeCmd:SelectSubTypeCommand;
+        public var selectServerKeyMapCommand:SelectCommand;
 
-        public var selectServerKeyMapCmd:SelectServerKeyMapCommand;
+        public var selectKeysCommand:SelectCommand;
 
-        public var selectKeysCmd:SelectKeysCommand;
+        public var selectUpdatedCommand:SelectCommand;
 
-        public var selectUpdatedCmd:SelectUpdatedCommand;
-
-        public var updateVersionCmd:UpdateVersionCommand;
+        public var updateVersionCommand:UpdateCommand;
 
         public var indexCommands:Array;
 
         public var identities:Array;
 
         public var superEntity:Entity;
+
+        public var hierarchical:Boolean;
+
+        private var _selectMaxRgtCommand:SelectMaxRgtCommand;
+
+        private var _updateLeftBoundaryCommand:UpdateNestedSetsLeftBoundaryCommand;
+
+        private var _updateRightBoundaryCommand:UpdateNestedSetsRightBoundaryCommand;
+
+        private var _updateNestedSetsCommand:UpdateNestedSetsCommand;
 
         private var _isSuperEntity:Boolean;
 
@@ -70,6 +79,8 @@ package nz.co.codec.flexorm.metamodel
         private var _fkColumn:String;
 
         private var _fkProperty:String;
+
+        private var _parentProperty:String;
 
         private var _keys:Array;
 
@@ -91,6 +102,8 @@ package nz.co.codec.flexorm.metamodel
 
         private var _initialisationComplete:Boolean;
 
+        private var selectCommandBuildIncomplete:Boolean;
+
         public function Entity()
         {
             _isSuperEntity = false;
@@ -104,6 +117,7 @@ package nz.co.codec.flexorm.metamodel
             _manyToManyInverseAssociations = [];
             _dependencies = [];
             _initialisationComplete = false;
+            selectCommandBuildIncomplete = true;
         }
 
         /**
@@ -130,7 +144,59 @@ package nz.co.codec.flexorm.metamodel
             return _name;
         }
 
-        public function get isSuperEntity():Boolean
+        public function set selectMaxRgtCommand(value:SelectMaxRgtCommand):void
+        {
+            _selectMaxRgtCommand = value;
+        }
+
+        public function get selectMaxRgtCommand():SelectMaxRgtCommand
+        {
+            if (!_selectMaxRgtCommand && superEntity)
+                return superEntity.selectMaxRgtCommand;
+            else
+                return _selectMaxRgtCommand;
+        }
+
+        public function set updateLeftBoundaryCommand(value:UpdateNestedSetsLeftBoundaryCommand):void
+        {
+            _updateLeftBoundaryCommand = value;
+        }
+
+        public function get updateLeftBoundaryCommand():UpdateNestedSetsLeftBoundaryCommand
+        {
+            if (!_updateLeftBoundaryCommand && superEntity)
+                return superEntity.updateLeftBoundaryCommand;
+            else
+                return _updateLeftBoundaryCommand;
+        }
+
+        public function set updateRightBoundaryCommand(value:UpdateNestedSetsRightBoundaryCommand):void
+        {
+            _updateRightBoundaryCommand = value;
+        }
+
+        public function get updateRightBoundaryCommand():UpdateNestedSetsRightBoundaryCommand
+        {
+            if (!_updateRightBoundaryCommand && superEntity)
+                return superEntity.updateRightBoundaryCommand;
+            else
+                return _updateRightBoundaryCommand;
+        }
+
+        public function set updateNestedSetsCommand(value:UpdateNestedSetsCommand):void
+        {
+            _updateNestedSetsCommand = value;
+        }
+
+        public function get updateNestedSetsCommand():UpdateNestedSetsCommand
+        {
+            if (!_updateNestedSetsCommand && superEntity)
+                return superEntity.updateNestedSetsCommand;
+            else
+                return _updateNestedSetsCommand;
+        }
+
+        public function isSuperEntity():Boolean
         {
             return _isSuperEntity;
         }
@@ -220,6 +286,19 @@ package nz.co.codec.flexorm.metamodel
             return _fkProperty;
         }
 
+        public function set parentProperty(value:String):void
+        {
+            _parentProperty = value;
+        }
+
+        public function get parentProperty():String
+        {
+            if (!_parentProperty && superEntity)
+                return superEntity.parentProperty;
+            else
+                return _parentProperty;
+        }
+
         public function set keys(value:Array):void
         {
             _keys = value;
@@ -249,7 +328,7 @@ package nz.co.codec.flexorm.metamodel
 
         public function hasCompositeKey():Boolean
         {
-            return (_keys && _keys.length > 1)? true : false;
+            return (_keys && _keys.length > 1) ? true : false;
         }
 
         public function set fields(value:Array):void
@@ -267,15 +346,17 @@ package nz.co.codec.flexorm.metamodel
             return _fields;
         }
 
-        public function getColumn(property:String):String
+        public function getColumn(property:String):Object
         {
             for each(var field:Field in fields)
             {
                 if (field.property == property)
                 {
-                    return field.column;
+                    return { table: table, column: field.column };
                 }
             }
+            if (superEntity)
+                return superEntity.getColumn(property);
             return null;
         }
 
@@ -413,6 +494,44 @@ package nz.co.codec.flexorm.metamodel
         public function get subEntities():Array
         {
             return _subEntities;
+        }
+
+        public function buildSelectCommands():void
+        {
+            if (superEntity && selectCommandBuildIncomplete)
+            {
+                superEntity.buildSelectCommands();
+                selectCommand.mergeColumns(superEntity.selectCommand.columns);
+                selectSubtypeCommand.mergeColumns(superEntity.selectCommand.columns);
+                selectAllCommand.mergeColumns(superEntity.selectAllCommand.columns);
+                if (selectNestedSetsCommand)
+                {
+                    selectNestedSetsCommand.mergeColumns(superEntity.selectNestedSetsCommand.columns);
+                    selectNestedSetsCommand.mergeFilters(superEntity.selectNestedSetsCommand.filters);
+                    selectNestedSetsCommand.mergeSorts(superEntity.selectNestedSetsCommand.sorts);
+                }
+                if (hasCompositeKey())
+                {
+                    for each(var identity:Identity in identities)
+                    {
+                        selectCommand.addJoin(superEntity.table, identity.column, identity.column);
+                        selectSubtypeCommand.addJoin(superEntity.table, identity.column, identity.column);
+                        selectAllCommand.addJoin(superEntity.table, identity.column, identity.column);
+                        if (selectNestedSetsCommand)
+                            selectNestedSetsCommand.addJoin(superEntity.table, identity.column, identity.column);
+                    }
+
+                }
+                else
+                {
+                    selectCommand.addJoin(superEntity.table, pk.column, superEntity.pk.column);
+                    selectSubtypeCommand.addJoin(superEntity.table, pk.column, superEntity.pk.column);
+                    selectAllCommand.addJoin(superEntity.table, pk.column, superEntity.pk.column);
+                    if (selectNestedSetsCommand)
+                        selectNestedSetsCommand.addJoin(superEntity.table, pk.column, superEntity.pk.column);
+                }
+                selectCommandBuildIncomplete = false;
+            }
         }
 
         public function equals(other:*):Boolean

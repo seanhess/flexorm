@@ -1,5 +1,7 @@
 package nz.co.codec.flexorm.criteria
 {
+    import mx.utils.StringUtil;
+
     public class Sort extends Condition
     {
         public static const ASC :String = "asc";
@@ -8,9 +10,9 @@ package nz.co.codec.flexorm.criteria
 
         private var _order:String;
 
-        public function Sort(column:String, order:String=null)
+        public function Sort(table:String, column:String, order:String=null)
         {
-            super(column);
+            super(table, column);
             switch (order)
             {
                 case DESC:
@@ -24,7 +26,7 @@ package nz.co.codec.flexorm.criteria
 
         override public function toString():String
         {
-            return column + " " + _order;
+            return StringUtil.substitute("{0} {1}", column, _order);
         }
 
     }

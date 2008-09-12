@@ -2,6 +2,8 @@ package nz.co.codec.flexorm.command
 {
     import flash.data.SQLConnection;
 
+    import mx.utils.StringUtil;
+
     public class ConstraintInsertTriggerCommand extends SQLCommand
     {
         public function ConstraintInsertTriggerCommand(
@@ -14,14 +16,8 @@ package nz.co.codec.flexorm.command
             debugLevel:int=0)
         {
             super(sqlConnection, schema, table, debugLevel);
-            _statement.text = "create trigger fki_" + table + "_" + column +
-                " before insert on " + schema + "." + table +
-                " for each row begin" +
-                " select raise(rollback, 'insert on table \"" + table +
-                "\" violates foreign key constraint \"fki_" + table + "_" + column + "\"')" +
-                " where new." + column + " is not null and new." + column +
-                " <> 0 and (select " + constraintColumn + " from " + schema + "." + constraintTable +
-                " where " + constraintColumn + " = new." + column + ") is null; end;";
+            _statement.text = StringUtil.substitute("create trigger fki_{1}_{2} before insert on {0}.{1} for each row begin select raise(rollback, 'insert on table \"{1}\" violates foreign key constraint \"fki_{1}_{2}\"') where new.{2} is not null and new.{2}<>0 and (select t.{4} from {0}.{3} t where t.{4}=new.{2}) is null; end;",
+                schema, table, column, constraintTable, constraintColumn);
         }
 
         public function toString():String

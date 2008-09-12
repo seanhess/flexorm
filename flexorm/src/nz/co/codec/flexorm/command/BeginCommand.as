@@ -37,9 +37,9 @@ package nz.co.codec.flexorm.command
                     _responder.result(new EntityEvent(ev.type));
                 },
 
-                function(err:SQLError):void
+                function(e:SQLError):void
                 {
-                    _responder.fault(new EntityErrorEvent(err.message, err));
+                    _responder.fault(new EntityErrorEvent(e.details, e));
                 }
             ));
         }

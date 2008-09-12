@@ -1,26 +1,25 @@
 package nz.co.codec.flexorm.metamodel
 {
-    import nz.co.codec.flexorm.command.CreateSyncCommand;
     import nz.co.codec.flexorm.command.CreateAsynCommand;
+    import nz.co.codec.flexorm.command.CreateSynCommand;
     import nz.co.codec.flexorm.command.InsertCommand;
-    import nz.co.codec.flexorm.command.SelectManyToManyCommand;
-    import nz.co.codec.flexorm.command.SelectManyToManyKeysCommand;
+    import nz.co.codec.flexorm.command.SelectCommand;
     import nz.co.codec.flexorm.command.UpdateCommand;
 
     public class ManyToManyAssociation extends ListAssociation
     {
         /**
-         * An instance of SelectOneToManyCommand to select the associated
-         * entities using the id value of the owning entity as a parameter to
-         * the FK in the 'where clause'.
+         * An instance of SelectCommand to select the associated entities
+         * using the id value of the owning entity as a parameter to the FK
+         * in the 'where clause'.
          */
-        public var selectCommand:SelectManyToManyCommand;
+        public var selectCommand:SelectCommand;
 
         /**
-         * An instance of SelectManyToManyKeysCommand to select the FK values
-         * relating to the list of associated entities.
+         * An instance of SelectCommand to select the FK values relating to the
+         * list of associated entities.
          */
-        public var selectManyToManyKeysCmd:SelectManyToManyKeysCommand;
+        public var selectManyToManyKeysCommand:SelectCommand;
 
         /**
          * An instance of InsertCommand, which creates a row in the association
@@ -34,9 +33,9 @@ package nz.co.codec.flexorm.metamodel
          */
         public var updateCommand:UpdateCommand;
 
-        public var createSyncCmd:CreateSyncCommand;
+        public var createSynCommand:CreateSynCommand;
 
-        public var createAsynCmd:CreateAsynCommand;
+        public var createAsynCommand:CreateAsynCommand;
 
         private var _associationTable:String;
 

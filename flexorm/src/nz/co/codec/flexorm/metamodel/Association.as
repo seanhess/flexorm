@@ -41,6 +41,8 @@ package nz.co.codec.flexorm.metamodel
 
         public var constrain:Boolean;
 
+        public var hierarchical:Boolean;
+
         private var _ownerEntity:Entity;
 
         private var _associatedEntity:Entity;

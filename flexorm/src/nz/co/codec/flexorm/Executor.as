@@ -18,7 +18,7 @@ package nz.co.codec.flexorm
 
         private var _data:Object;
 
-        private var _id:int;
+        private var _id:*;
 
         private var _debugLevel:int;
 
@@ -103,12 +103,12 @@ package nz.co.codec.flexorm
             return _data;
         }
 
-        public function set id(value:int):void
+        public function set id(value:*):void
         {
             _id = value;
         }
 
-        public function get id():int
+        public function get id():*
         {
             return _id;
         }
@@ -138,8 +138,6 @@ package nz.co.codec.flexorm
 
         public function fault(info:Object):void
         {
-            trace("!! " + getQualifiedClassName(info));
-            trace(info);
             _responder.fault(info);
         }
 

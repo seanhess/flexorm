@@ -12,7 +12,7 @@ package nz.co.codec.flexorm.metamodel
          */
         public var deleteCommand:DeleteCommand;
 
-        public var updateFKAfterDeleteCmd:UpdateCommand;
+        public var updateFKAfterDeleteCommand:UpdateCommand;
 
         public var lazy:Boolean = false;
 

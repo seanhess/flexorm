@@ -4,6 +4,8 @@ package nz.co.codec.flexorm
 
     import mx.collections.ArrayCollection;
 
+    import nz.co.codec.flexorm.criteria.Criteria;
+
     public interface IEntityManager
     {
         function startTransaction():void
@@ -11,6 +13,12 @@ package nz.co.codec.flexorm
         function endTransaction():void;
 
         function findAll(cls:Class):ArrayCollection;
+
+        function createCriteria(cls:Class):Criteria;
+
+        function fetchCriteria(crit:Criteria):ArrayCollection;
+
+        function fetchCriteriaFirstResult(crit:Criteria):Object;
 
         function load(cls:Class, id:int):Object;
 
@@ -42,6 +50,8 @@ package nz.co.codec.flexorm
 
 
         // Not fully implemented ------------------------------
+
+        function saveHierarchy(obj:Object, opt:Object=null):Object;
 
         function loadDynamicObject(name:String, id:int):Object;
 

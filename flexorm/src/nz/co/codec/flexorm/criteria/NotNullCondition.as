@@ -2,14 +2,14 @@ package nz.co.codec.flexorm.criteria
 {
     public class NotNullCondition extends Condition
     {
-        public function NotNullCondition(column:String)
+        public function NotNullCondition(table:String, column:String)
         {
-            super(column);
+            super(table, column);
         }
 
         override public function toString():String
         {
-            return "t." + column + " is not null";
+            return column + " is not null";
         }
 
     }

@@ -2,6 +2,8 @@ package nz.co.codec.flexorm.command
 {
     import flash.data.SQLConnection;
 
+    import mx.utils.StringUtil;
+
     public class SQLParameterisedCommand extends SQLCommand
     {
         public function SQLParameterisedCommand(
@@ -29,10 +31,22 @@ package nz.co.codec.flexorm.command
 
         protected function traceParameters():void
         {
-            for (var key:String in _statement.parameters)
+            for (var param:String in _statement.parameters)
             {
-                trace("_param " + key + "=" + _statement.parameters[key]);
+                var value:Object = _statement.parameters[param];
+                var n:int = 20 - param.length;
+                while (n-- > 0)
+                    param += " ";
+                if (value is String)
+                {
+                    trace(StringUtil.substitute("_param {0}=\"{1}\"", param, value));
+                }
+                else
+                {
+                    trace(StringUtil.substitute("_param {0}={1}", param, value));
+                }
             }
+            trace();
         }
 
     }

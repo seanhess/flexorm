@@ -70,8 +70,8 @@ package nz.co.codec.flexorm.util
             for (var x:String in desc.factory.variable)
                 memberProperties.push(desc.factory.variable.@name[x]);
 
-            return {statics: { methods: staticMethods, properties: staticProperties },
-                    members: { methods: memberMethods, properties: memberProperties } };
+            return { statics: { methods: staticMethods, properties: staticProperties },
+                     members: { methods: memberMethods, properties: memberProperties } };
         }
 
     }

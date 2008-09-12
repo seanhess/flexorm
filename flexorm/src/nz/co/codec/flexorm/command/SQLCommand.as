@@ -11,6 +11,9 @@ package nz.co.codec.flexorm.command
     import nz.co.codec.flexorm.EntityErrorEvent;
     import nz.co.codec.flexorm.EntityEvent;
     import nz.co.codec.flexorm.ICommand;
+    import nz.co.codec.flexorm.criteria.EqualsCondition;
+    import nz.co.codec.flexorm.criteria.IFilter;
+    import nz.co.codec.flexorm.criteria.SQLCondition;
 
     public class SQLCommand implements ICommand
     {
@@ -28,7 +31,7 @@ package nz.co.codec.flexorm.command
 
         protected var _columns:Object;
 
-        protected var _filters:Object;
+        protected var _filters:Array;
 
         protected var _responder:IResponder;
 
@@ -42,43 +45,10 @@ package nz.co.codec.flexorm.command
             _debugLevel = debugLevel;
             _statement = new SQLStatement();
             _statement.sqlConnection = sqlConnection;
-            _columns = {};
-            _filters = {};
             _changed = true;
             _responded = false;
-        }
-
-        public function set columns(value:Object):void
-        {
-            _columns = value;
-            _changed = true;
-        }
-
-        public function get columns():Object
-        {
-            return _columns;
-        }
-
-        protected function set filters(value:Object):void
-        {
-            _filters = value;
-        }
-
-        protected function set debugLevel(value:int):void
-        {
-            _debugLevel = value;
-        }
-
-        public function addColumn(column:String, param:String):void
-        {
-            _columns[column] = ":" + param;
-            _changed = true;
-        }
-
-        public function addFilter(column:String, param:String):void
-        {
-            _filters[column] = ":" + param;
-            _changed = true;
+            _columns = {};
+            _filters = [];
         }
 
         public function set responder(value:IResponder):void
@@ -90,19 +60,8 @@ package nz.co.codec.flexorm.command
 
         protected function resultHandler(event:SQLEvent):void
         {
-//            _statement.removeEventListener(SQLEvent.RESULT, resultHandler);
-//            _statement.removeEventListener(SQLErrorEvent.ERROR, errorHandler);
             respond(event);
             _responded = true;
-        }
-
-        protected function errorHandler(event:SQLErrorEvent):void
-        {
-//            _statement.removeEventListener(SQLEvent.RESULT, resultHandler);
-//            _statement.removeEventListener(SQLErrorEvent.ERROR, errorHandler);
-            trace(event.error.details);
-//            if (!_sqlConnection.inTransaction)
-                _responder.fault(new EntityErrorEvent(event.error.details, event.error));
         }
 
         protected function respond(event:SQLEvent):void
@@ -113,6 +72,97 @@ package nz.co.codec.flexorm.command
         public function get responded():Boolean
         {
             return _responded;
+        }
+
+        protected function errorHandler(event:SQLErrorEvent):void
+        {
+            trace(event.error.details);
+            _responder.fault(new EntityErrorEvent(event.error.details, event.error));
+        }
+
+        public function set columns(value:Object):void
+        {
+            _columns = value;
+            _changed = true;
+        }
+
+        public function addColumn(column:String, param:String=null, table:String=null):void
+        {
+            if (param == null)
+            {
+                _columns[column] = ":" + column;
+            }
+            else
+            {
+                if (param.indexOf(":") == 0)
+                {
+                    _columns[column] = param;
+                }
+                else
+                {
+                    _columns[column] = ":" + param;
+                }
+            }
+            _changed = true;
+        }
+
+        public function get columns():Object
+        {
+            return _columns;
+        }
+
+        public function addFilter(column:String, param:String, table:String=null):void
+        {
+            if (table == null)
+            {
+                if (_table == null)
+                {
+                    throw new Error("Unknown table: " + getQualifiedClassName(this));
+                }
+                else
+                {
+                    table = _table;
+                }
+            }
+            addEqualsCondition(table, column, param);
+        }
+
+        public function addFilterObject(filter:IFilter):void
+        {
+            _filters.push(filter);
+        }
+
+        public function addEqualsCondition(table:String, column:String, param:String):void
+        {
+            if (table && column && param)
+            {
+                _filters.push(new EqualsCondition(table, column, param));
+            }
+            else
+            {
+                throw new Error("Null argument supplied to "
+                    + getQualifiedClassName(this) + ".addEqualsCondition ");
+            }
+            _changed = true;
+        }
+
+        public function addSQLCondition(sql:String):void
+        {
+            if (sql)
+            {
+                _filters.push(new SQLCondition(_table, sql));
+            }
+            else
+            {
+                throw new Error("Null argument supplied to "
+                    + getQualifiedClassName(this) + ".addSQLCondition ");
+            }
+            _changed = true;
+        }
+
+        public function get filters():Array
+        {
+            return _filters;
         }
 
         // abstract
@@ -129,10 +179,13 @@ package nz.co.codec.flexorm.command
             _statement.execute();
         }
 
+        protected function set debugLevel(value:int):void
+        {
+            _debugLevel = value;
+        }
+
         protected function debug():void
         {
-//            trace(">> " + getQualifiedClassName(this));
-//            trace("In Transaction? " + _sqlConnection.inTransaction);
             trace(this);
         }
 

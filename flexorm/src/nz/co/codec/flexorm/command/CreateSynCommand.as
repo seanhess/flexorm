@@ -7,16 +7,19 @@ package nz.co.codec.flexorm.command
     import flash.errors.SQLError;
 
     import mx.collections.ArrayCollection;
+    import mx.utils.StringUtil;
 
-    import nz.co.codec.flexorm.ICommand;
+    import nz.co.codec.flexorm.metamodel.IDStrategy;
 
-    public class CreateSyncCommand extends SQLCommand
+    public class CreateSynCommand extends SQLCommand
     {
         private var _created:Boolean;
 
         private var _pk:String;
 
-        public function CreateSyncCommand(
+        private var _idColumn:String;
+
+        public function CreateSynCommand(
             sqlConnection:SQLConnection,
             schema:String,
             table:String,
@@ -26,13 +29,21 @@ package nz.co.codec.flexorm.command
             _created = false;
         }
 
-        public function setPrimaryKey(column:String):void
+        public function setPrimaryKey(column:String, idStrategy:String):void
         {
-            _pk = column + " integer primary key autoincrement";
+            if (IDStrategy.UID == idStrategy)
+            {
+                _pk = StringUtil.substitute("{0} string primary key", column);
+            }
+            else
+            {
+                _pk = StringUtil.substitute("{0} integer primary key autoincrement", column);
+            }
+            _idColumn = column;
             _changed = true;
         }
 
-        override public function addColumn(column:String, type:String):void
+        override public function addColumn(column:String, type:String=null, table:String=null):void
         {
             _columns[column] = { type: type };
             _changed = true;
@@ -45,9 +56,9 @@ package nz.co.codec.flexorm.command
             constraintColumn:String):void
         {
             _columns[column] = {
-                type: type,
+                type      : type,
                 constraint: {
-                    table: constraintTable,
+                    table : constraintTable,
                     column: constraintColumn
                 }
             };
@@ -91,7 +102,7 @@ package nz.co.codec.flexorm.command
                     return existingColumns;
                 }
             }
-            catch (err:SQLError) { }
+            catch (e:SQLError) { }
             return null;
         }
 
@@ -100,10 +111,10 @@ package nz.co.codec.flexorm.command
             var sql:String = "";
             for (var column:String in _columns)
             {
-                if (!existingColumns.contains(column))
+                if (!existingColumns.contains(column) && column != _idColumn)
                 {
-                    sql += "alter table " + _schema + "." + _table +
-                        " add " + column + " " + _columns[column].type + ";";
+                    sql += StringUtil.substitute("alter table {0}.{1} add {2} {3};",
+                           _schema, _table, column, _columns[column].type);
                 }
             }
             return (sql.length > 0)? sql : null;
@@ -111,13 +122,13 @@ package nz.co.codec.flexorm.command
 
         private function buildCreateSQL():String
         {
-            var sql:String = "create table if not exists " + _schema + "." + _table + "(";
+            var sql:String = StringUtil.substitute("create table if not exists {0}.{1}(", _schema, _table);
             if (_pk)
                 sql += _pk + ",";
 
             for (var column:String in _columns)
             {
-                sql += column + " " + _columns[column].type + ",";
+                sql += StringUtil.substitute("{0} {1},", column, _columns[column].type);
             }
             sql = sql.substring(0, sql.length - 1) + ")"; // remove last comma
             return sql;
@@ -144,14 +155,9 @@ package nz.co.codec.flexorm.command
                     var constraint:Object = _columns[column].constraint;
                     if (constraint)
                     {
-                        var insertTrigger:ICommand = new ConstraintInsertTriggerCommand(_sqlConnection, _schema, _table, column, constraint.table, constraint.column, _debugLevel);
-                        insertTrigger.execute();
-
-                        var updateTrigger:ICommand = new ConstraintUpdateTriggerCommand(_sqlConnection, _schema, _table, column, constraint.table, constraint.column, _debugLevel);
-                        updateTrigger.execute();
-
-                        var deleteTrigger:ICommand = new ConstraintDeleteTriggerCommand(_sqlConnection, _schema, _table, column, constraint.table, constraint.column, _debugLevel);
-                        deleteTrigger.execute();
+                        new ConstraintInsertTriggerCommand(_sqlConnection, _schema, _table, column, constraint.table, constraint.column, _debugLevel).execute();
+                        new ConstraintUpdateTriggerCommand(_sqlConnection, _schema, _table, column, constraint.table, constraint.column, _debugLevel).execute();
+                        new ConstraintDeleteTriggerCommand(_sqlConnection, _schema, _table, column, constraint.table, constraint.column, _debugLevel).execute();
                     }
                 }
             }
@@ -159,7 +165,7 @@ package nz.co.codec.flexorm.command
 
         public function toString():String
         {
-            return "CREATE SYNC " + _table + ": " + _statement.text;
+            return "CREATE " + _table + ": " + _statement.text;
         }
 
     }

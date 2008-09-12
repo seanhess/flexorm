@@ -8,9 +8,11 @@ package nz.co.codec.flexorm.command
     import flash.events.SQLEvent;
 
     import mx.collections.ArrayCollection;
+    import mx.utils.StringUtil;
 
     import nz.co.codec.flexorm.BlockingExecutor;
     import nz.co.codec.flexorm.EntityEvent;
+    import nz.co.codec.flexorm.metamodel.IDStrategy;
 
     public class CreateAsynCommand extends SQLCommand
     {
@@ -28,13 +30,20 @@ package nz.co.codec.flexorm.command
             _created = false;
         }
 
-        public function setPrimaryKey(column:String):void
+        public function setPrimaryKey(column:String, idStrategy:String):void
         {
-            _pk = column + " integer primary key autoincrement";
+            if (IDStrategy.UID == idStrategy)
+            {
+                _pk = StringUtil.substitute("{0} string primary key", column);
+            }
+            else
+            {
+                _pk = StringUtil.substitute("{0} integer primary key autoincrement", column);
+            }
             _changed = true;
         }
 
-        override public function addColumn(column:String, type:String):void
+        override public function addColumn(column:String, type:String=null, table:String=null):void
         {
             _columns[column] = { type: type };
             _changed = true;
@@ -47,9 +56,9 @@ package nz.co.codec.flexorm.command
             constraintColumn:String):void
         {
             _columns[column] = {
-                type: type,
+                type      : type,
                 constraint: {
-                    table: constraintTable,
+                    table : constraintTable,
                     column: constraintColumn
                 }
             };
@@ -173,8 +182,8 @@ package nz.co.codec.flexorm.command
             {
                 if (!existingColumns.contains(column))
                 {
-                    sql += "alter table " + _table +
-                        " add " + column + " " + _columns[column].type + ";";
+                    sql += StringUtil.substitute("alter table {0} add {1} {2};",
+                            _table, column, _columns[column].type);
                 }
             }
             return (sql.length > 0)? sql : null;
@@ -182,13 +191,13 @@ package nz.co.codec.flexorm.command
 
         private function buildCreateSQL():String
         {
-            var sql:String = "create table if not exists " + _schema + "." + _table + "(";
+            var sql:String = StringUtil.substitute("create table if not exists {0}.{1}(", _schema, _table);
             if (_pk)
                 sql += _pk + ",";
 
             for (var column:String in _columns)
             {
-                sql += column + " " + _columns[column].type + ",";
+                sql += StringUtil.substitute("{0} {1},", column, _columns[column].type);
             }
             sql = sql.substring(0, sql.length - 1) + ")"; // remove last comma
             return sql;
@@ -196,7 +205,7 @@ package nz.co.codec.flexorm.command
 
         public function toString():String
         {
-            return "CREATE ASYN " + _table + ": " + _statement.text;
+            return "CREATE " + _table + ": " + _statement.text;
         }
 
     }
