@@ -1,7 +1,9 @@
 package ormtest.model
 {
+    import nz.co.codec.flexorm.metamodel.HierarchicalObject;
+
     [Bindable]
-    public class FileObject
+    public class FileObject extends HierarchicalObject
     {
         public var id:int;
 

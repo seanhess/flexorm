@@ -10,6 +10,8 @@ package ormtest
     import nz.co.codec.flexorm.EntityErrorEvent;
     import nz.co.codec.flexorm.EntityEvent;
     import nz.co.codec.flexorm.EntityManagerAsync;
+    import nz.co.codec.flexorm.criteria.Criteria;
+    import nz.co.codec.flexorm.criteria.Sort;
 
     import ormtest.model.Contact;
     import ormtest.model.Lesson;
@@ -45,6 +47,8 @@ package ormtest
             ts.addTest(new EntityManagerAsyncTest("testCompositeKeyOneToMany"));
             ts.addTest(new EntityManagerAsyncTest("testOneToManyIndexedCollection"));
             ts.addTest(new EntityManagerAsyncTest("testManyToManyIndexedCollection"));
+            ts.addTest(new EntityManagerTest("testCriteriaAPI"));
+            ts.addTest(new EntityManagerTest("testCriteriaAPI2"));
             return ts;
         }
 
@@ -931,6 +935,99 @@ package ormtest
                                             throw e;
                                         }
                                     ));
+                                }, 1500),
+
+                                function(e:EntityErrorEvent):void
+                                {
+                                    throw e;
+                                }
+                            ));
+                        }, 1500),
+
+                        function(e:EntityErrorEvent):void
+                        {
+                            throw e;
+                        }
+                    ));
+                }, 1500),
+
+                function(e:EntityErrorEvent):void
+                {
+                    throw e;
+                }
+            ));
+        }
+
+        public function testCriteriaAPI():void
+        {
+            trace("\nTest Criteria API");
+            trace("=================");
+            var organisation:Organisation = new Organisation();
+            organisation.name = "Atlassian";
+            em.save(organisation, new Responder(
+
+                addAsync(function(ev:EntityEvent):void
+                {
+                    em.createCriteria(Organisation, new Responder(
+
+                        addAsync(function(ev:EntityEvent):void
+                        {
+                            var criteria:Criteria = ev.data as Criteria;
+                            criteria.addLikeCondition("name", "lass").addSort("name", Sort.ASC);
+                            em.fetchCriteria(criteria, new Responder(
+
+                                addAsync(function(ev:EntityEvent):void
+                                {
+                                    var loadedOrganisation:Organisation = ev.data[0] as Organisation;
+                                    trace("loaded organisation");
+                                    assertEquals(loadedOrganisation.name, "Atlassian");
+                                }, 1500),
+
+                                function(e:EntityErrorEvent):void
+                                {
+                                    throw e;
+                                }
+                            ));
+                        }, 1500),
+
+                        function(e:EntityErrorEvent):void
+                        {
+                            throw e;
+                        }
+                    ));
+                }, 1500),
+
+                function(e:EntityErrorEvent):void
+                {
+                    throw e;
+                }
+            ));
+        }
+
+        public function testCriteriaAPI2():void
+        {
+            trace("\nTest Criteria API 2");
+            trace("===================");
+            var contact:Contact = new Contact();
+            contact.name = "Mark";
+            contact.emailAddr = "mark@codec.co.nz";
+            em.save(contact, new Responder(
+
+                addAsync(function(ev:EntityEvent):void
+                {
+                    em.createCriteria(Contact, new Responder(
+
+                        addAsync(function(ev:EntityEvent):void
+                        {
+                            var criteria:Criteria = ev.data as Criteria;
+                            criteria.addJunction(criteria.createAndJunction().addLikeCondition("name", "M").addLikeCondition("emailAddr", "codec")).addSort("name");
+                            em.fetchCriteria(criteria, new Responder(
+
+                                addAsync(function(ev:EntityEvent):void
+                                {
+                                    var loadedContact:Contact = ev.data[0] as Contact;
+                                    trace("loaded contact");
+                                    assertEquals(loadedContact.name, "Mark");
                                 }, 1500),
 
                                 function(e:EntityErrorEvent):void

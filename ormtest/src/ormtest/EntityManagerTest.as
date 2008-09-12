@@ -8,6 +8,7 @@ package ormtest
 
     import nz.co.codec.flexorm.EntityManager;
     import nz.co.codec.flexorm.criteria.Criteria;
+    import nz.co.codec.flexorm.criteria.Junction;
     import nz.co.codec.flexorm.criteria.Sort;
 
     import ormtest.model.A;
@@ -60,6 +61,7 @@ package ormtest
             ts.addTest(new EntityManagerTest("testRecursiveJoin"));
             ts.addTest(new EntityManagerTest("testLazyLoading"));
             ts.addTest(new EntityManagerTest("testCriteriaAPI"));
+            ts.addTest(new EntityManagerTest("testCriteriaAPI2"));
             return ts;
         }
 
@@ -579,6 +581,23 @@ package ormtest
             var result:ArrayCollection = em.fetchCriteria(criteria);
             var loadedOrganisation:Organisation = result[0] as Organisation;
             assertEquals(loadedOrganisation.name, "Atlassian");
+        }
+
+        public function testCriteriaAPI2():void
+        {
+            trace("\nTest Criteria API 2");
+            trace("===================");
+            var contact:Contact = new Contact();
+            contact.name = "Mark";
+            contact.emailAddr = "mark@codec.co.nz";
+            em.save(contact);
+
+            var criteria:Criteria = em.createCriteria(Contact);
+            criteria.addJunction(criteria.createAndJunction().addLikeCondition("name", "M").addLikeCondition("emailAddr", "codec")).addSort("name");
+
+            var result:ArrayCollection = em.fetchCriteria(criteria);
+            var loadedContact:Contact = result[0] as Contact;
+            assertEquals(loadedContact.name, "Mark");
         }
 
     }

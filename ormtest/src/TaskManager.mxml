@@ -22,7 +22,7 @@
                 em.openSyncConnection("tree-test.db");
                 var crit:Criteria = em.createCriteria(Task);
                 crit.addNullCondition("parent");
-                tasksRoot = em.fetchCriteriaUniq(crit) as Task;
+                tasksRoot = em.fetchCriteriaFirstResult(crit) as Task;
                 if (tasksRoot == null)
                     tasksRoot = new Task();
 

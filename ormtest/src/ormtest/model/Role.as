@@ -4,9 +4,9 @@ package ormtest.model
     [Table(name="jobs")]
     public class Role
     {
-        [Id]
+        [Id(strategy="uid")]
         [Column(name="my_role_id")]
-        public var id:int;
+        public var id:String;
 
         [Column(name="title")]
         public var name:String;

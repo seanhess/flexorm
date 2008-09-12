@@ -4,11 +4,13 @@
     creationComplete="loadData()">
     <mx:Script>
         <![CDATA[
-            import nz.co.codec.flexorm.criteria.Criteria;
             import mx.collections.HierarchicalData;
             import mx.collections.ArrayCollection;
             import mx.events.ListEvent;
+
             import nz.co.codec.flexorm.EntityManager;
+            import nz.co.codec.flexorm.criteria.Criteria;
+
             import ormtest.model.Document;
             import ormtest.model.FileObject;
             import ormtest.model.Folder;
@@ -28,15 +30,42 @@
             private function loadData():void
             {
                 em.debugLevel = 1;
+
+                // **********************************************************************
+                // Persistence code - loading
+                // **********************************************************************
+
                 em.openSyncConnection("tree-test2.db");
-                var crit:Criteria = em.createCriteria(Folder);
-                crit.addNullCondition("parent");
-                filesRoot = em.fetchCriteriaUniq(crit) as Folder;
+                var crit:Criteria = em.createCriteria(Folder).addNullCondition("parent");
+                filesRoot = em.fetchCriteriaFirstResult(crit) as Folder;
+
+                // **********************************************************************
+
                 if (filesRoot == null)
                     filesRoot = new Folder();
 
                 filesGrid.dataProvider = new HierarchicalData(filesRoot);
                 filesGrid.addEventListener(ListEvent.CHANGE, gridChangeHandler);
+            }
+
+            private function saveTree():void
+            {
+
+                // **********************************************************************
+                // Persistence code - saving
+                // **********************************************************************
+
+                for each(var file:FileObject in removedItems)
+                {
+                    if (file.id > 0)
+                        em.remove(file);
+                }
+                filesRoot = em.saveHierarchy(filesRoot) as Folder;
+
+                // **********************************************************************
+
+                filesGrid.dataProvider = new HierarchicalData(filesRoot);
+                removedItems.length = 0;
             }
 
             private function gridChangeHandler(event:Event):void
@@ -57,7 +86,7 @@
                 parent.addChild(folder);
                 filesGrid.invalidateList();
                 filesGrid.expandItem(parent, true);
-                filesGrid.selectedItem = folder;
+                filesGrid.setFocus();
                 updateButtons();
             }
 
@@ -68,7 +97,7 @@
                 parent.addChild(document);
                 filesGrid.invalidateList();
                 filesGrid.expandItem(parent, true);
-                filesGrid.selectedItem = document;
+                filesGrid.setFocus();
                 updateButtons();
             }
 
@@ -101,22 +130,26 @@
                 return (file && (file.getIndex() < Folder(file.parent).children.length - 1))? true : false;
             }
 
-            private function saveTree():void
+            private function editItem(event:ListEvent):void
             {
-                em.save(filesRoot);
-                for each(var file:FileObject in removedItems)
-                {
-                    em.remove(file);
-                }
-                removedItems.length = 0;
+                filesGrid.editable = "item";
+                filesGrid.editedItemPosition = { columnIndex: event.columnIndex, rowIndex: event.rowIndex };
+            }
+
+            private function itemEditEndHandler(event:Event):void
+            {
+                filesGrid.editable = "";
             }
         ]]>
     </mx:Script>
 
     <mx:VBox width="100%" height="100%" horizontalAlign="center">
+
         <mx:AdvancedDataGrid id="filesGrid"
             width="100%" height="100%"
-            editable="true">
+            doubleClickEnabled="true"
+            itemDoubleClick="editItem(event)"
+            itemEditEnd="itemEditEndHandler(event)">
             <mx:columns>
                 <mx:AdvancedDataGridColumn dataField="name" headerText="Name"/>
             </mx:columns>
@@ -131,7 +164,6 @@
             <mx:Button label="Save" click="saveTree()"/>
             <mx:Button label="Reset" click="loadData()"/>
         </mx:HBox>
-
         <mx:Spacer height="10"/>
 
     </mx:VBox>
