@@ -25,7 +25,7 @@ package ormtest
 
     public class EntityManagerAsyncTest extends TestCase
     {
-        private static var em:EntityManagerAsync = EntityManagerAsync.instance;
+        private static var em:EntityManagerAsync = EntityManagerAsync.getInstance();
 
         public static function suite():TestSuite
         {
@@ -47,8 +47,8 @@ package ormtest
             ts.addTest(new EntityManagerAsyncTest("testCompositeKeyOneToMany"));
             ts.addTest(new EntityManagerAsyncTest("testOneToManyIndexedCollection"));
             ts.addTest(new EntityManagerAsyncTest("testManyToManyIndexedCollection"));
-            ts.addTest(new EntityManagerTest("testCriteriaAPI"));
-            ts.addTest(new EntityManagerTest("testCriteriaAPI2"));
+            ts.addTest(new EntityManagerAsyncTest("testCriteriaAPI"));
+            ts.addTest(new EntityManagerAsyncTest("testCriteriaAPI2"));
             return ts;
         }
 
@@ -970,7 +970,13 @@ package ormtest
                 {
                     em.createCriteria(Organisation, new Responder(
 
-                        addAsync(function(ev:EntityEvent):void
+
+                        // not using addAsync. createCriteria, in this case,
+                        // calls back the responder synchronously (since the
+                        // Organisation entity has already been introspected).
+                        // AsyncTestHelper.startAsync is not getting called
+                        // before AsyncTestHelper.handleEvent.
+                        function(ev:EntityEvent):void
                         {
                             var criteria:Criteria = ev.data as Criteria;
                             criteria.addLikeCondition("name", "lass").addSort("name", Sort.ASC);
@@ -988,7 +994,7 @@ package ormtest
                                     throw e;
                                 }
                             ));
-                        }, 1500),
+                        },
 
                         function(e:EntityErrorEvent):void
                         {
@@ -1017,7 +1023,7 @@ package ormtest
                 {
                     em.createCriteria(Contact, new Responder(
 
-                        addAsync(function(ev:EntityEvent):void
+                        function(ev:EntityEvent):void
                         {
                             var criteria:Criteria = ev.data as Criteria;
                             criteria.addJunction(criteria.createAndJunction().addLikeCondition("name", "M").addLikeCondition("emailAddr", "codec")).addSort("name");
@@ -1035,7 +1041,7 @@ package ormtest
                                     throw e;
                                 }
                             ));
-                        }, 1500),
+                        },
 
                         function(e:EntityErrorEvent):void
                         {

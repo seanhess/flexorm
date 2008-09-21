@@ -19,6 +19,8 @@
 
             private var filesRoot:Folder;
 
+            private var crit:Criteria;
+
             private var removedItems:Array = [];
 
             [Bindable]
@@ -36,7 +38,7 @@
                 // **********************************************************************
 
                 em.openSyncConnection("tree-test2.db");
-                var crit:Criteria = em.createCriteria(Folder).addNullCondition("parent");
+                crit = em.createCriteria(Folder).addNullCondition("parent");
                 filesRoot = em.fetchCriteriaFirstResult(crit) as Folder;
 
                 // **********************************************************************
@@ -58,9 +60,15 @@
                 for each(var file:FileObject in removedItems)
                 {
                     if (file.id > 0)
+                    {
                         em.remove(file);
+                        // Hierarchical objects must be refreshed between each
+                        // save or remove operation, otherwise set boundaries
+                        // will be wrong.
+                        filesRoot = em.fetchCriteriaFirstResult(crit) as Folder;
+                    }
                 }
-                filesRoot = em.saveHierarchy(filesRoot) as Folder;
+                filesRoot = em.saveHierarchicalObject(filesRoot) as Folder;
 
                 // **********************************************************************
 

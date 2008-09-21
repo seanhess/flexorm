@@ -1,174 +1,177 @@
 <?xml version="1.0" encoding="utf-8"?>
 <mx:WindowedApplication xmlns:mx="http://www.adobe.com/2006/mxml" layout="absolute"
-	width="650" height="420"
-	title="Contact Manager"
-	preinitialize="initDb()"
-	creationComplete="initApp()" xmlns:local="*">
-	<mx:Script>
-		<![CDATA[
-			import mx.collections.ArrayCollection;
-			import mx.collections.IList;
-			import mx.controls.dataGridClasses.DataGridColumn;
+    width="650" height="420"
+    title="Contact Manager"
+    preinitialize="initDb()"
+    creationComplete="initApp()" xmlns:local="*">
+    <mx:Script>
+        <![CDATA[
+            import mx.collections.ArrayCollection;
+            import mx.collections.IList;
+            import mx.controls.dataGridClasses.DataGridColumn;
 
-			import ormtest.model.Contact;
-			import ormtest.model.Order;
-			import ormtest.model.Organisation;
-			import ormtest.model.Role;
+            import ormtest.model.Contact;
+            import ormtest.model.Order;
+            import ormtest.model.Organisation;
+            import ormtest.model.Role;
 
-			import nz.co.codec.flexorm.EntityManager;
+            import nz.co.codec.flexorm.EntityManager;
 
-			[Bindable]
-			private var contacts:ArrayCollection;
+            [Bindable]
+            private var contacts:ArrayCollection;
 
-			[Bindable]
-			private var organisations:ArrayCollection;
+            [Bindable]
+            private var organisations:ArrayCollection;
 
-			[Bindable]
-			private var roles:ArrayCollection;
+            [Bindable]
+            private var roles:ArrayCollection;
 
-			[Bindable]
-			private var selectedContact:Contact;
+            [Bindable]
+            private var selectedContact:Contact;
 
-			private var em:EntityManager = EntityManager.instance;
+            private var em:EntityManager = EntityManager.instance;
 
-			private var newDb:Boolean = true;
+            private var newDb:Boolean = true;
 
-			private function initDb():void
-			{
-				em.debugLevel = 1;
-				var dbFile:File = File.userDirectory.resolvePath("ormtest_contacts.db");
-				newDb = !dbFile.exists;
-				var sqlConnection:SQLConnection = new SQLConnection();
-				sqlConnection.open(dbFile);
-				em.sqlConnection = sqlConnection;
-			}
+            private function initDb():void
+            {
+                em.debugLevel = 1;
+                var dbFile:File = File.userDirectory.resolvePath("ormtest_contacts.db");
+                newDb = !dbFile.exists;
+                var sqlConnection:SQLConnection = new SQLConnection();
+                sqlConnection.open(dbFile);
+                em.sqlConnection = sqlConnection;
+            }
 
-			private function initApp():void
-			{
-				if (newDb)
-				{
-					var organisation:Organisation = new Organisation();
-					organisation.name = "Codec Group Limited";
-					em.save(organisation);
+            private function initApp():void
+            {
+                // Align native AIR application window horizontally and vertically
+                nativeWindow.x = (Capabilities.screenResolutionX - nativeWindow.width) / 2;
+                nativeWindow.y = (Capabilities.screenResolutionY - nativeWindow.height) / 2;
+                if (newDb)
+                {
+                    var organisation:Organisation = new Organisation();
+                    organisation.name = "Codec Group Limited";
+                    em.save(organisation);
 
-					var orders:IList = new ArrayCollection();
-					var order1:Order = new Order();
-					order1.orderDate = new Date(); // today
-					order1.item = "Flex Builder 3";
-					orders.addItem(order1);
+                    var orders:IList = new ArrayCollection();
+                    var order1:Order = new Order();
+                    order1.orderDate = new Date(); // today
+                    order1.item = "Flex Builder 3";
+                    orders.addItem(order1);
 
-					var order2:Order = new Order();
-					order2.orderDate = new Date(); // today
-					order2.item = "CS3 Fireworks";
-					orders.addItem(order2);
+                    var order2:Order = new Order();
+                    order2.orderDate = new Date(); // today
+                    order2.item = "CS3 Fireworks";
+                    orders.addItem(order2);
 
-					var roles:IList = new ArrayCollection();
-					var role1:Role = new Role();
-					role1.name = "Project Manager";
-					em.save(role1);
-					roles.addItem(role1);
+                    var roles:IList = new ArrayCollection();
+                    var role1:Role = new Role();
+                    role1.name = "Project Manager";
+                    em.save(role1);
+                    roles.addItem(role1);
 
-					var role2:Role = new Role();
-					role2.name = "Business Analyst";
-					em.save(role2);
-					roles.addItem(role2);
+                    var role2:Role = new Role();
+                    role2.name = "Business Analyst";
+                    em.save(role2);
+                    roles.addItem(role2);
 
-					var contact:Contact = new Contact();
-					contact.name = "Mark";
-					contact.emailAddr = "mark@acme.com";
-					contact.organisation = organisation;
-					contact.orders = orders;
-					contact.roles = roles;
-					em.save(contact);
+                    var contact:Contact = new Contact();
+                    contact.name = "Mark";
+                    contact.emailAddr = "mark@acme.com";
+                    contact.organisation = organisation;
+                    contact.orders = orders;
+                    contact.roles = roles;
+                    em.save(contact);
 
-					contact = new Contact();
-					contact.name = "Sean";
-					contact.organisation = organisation;
-					em.save(contact);
-				}
-				loadContacts();
-				loadOrganisations();
-				loadRoles();
-			}
+                    contact = new Contact();
+                    contact.name = "Sean";
+                    contact.organisation = organisation;
+                    em.save(contact);
+                }
+                loadContacts();
+                loadOrganisations();
+                loadRoles();
+            }
 
-			private function loadContacts():void
-			{
-				contacts = em.findAll(Contact);
-			}
+            private function loadContacts():void
+            {
+                contacts = em.findAll(Contact);
+            }
 
-			private function loadOrganisations():void
-			{
-				organisations = em.findAll(Organisation);
-			}
+            private function loadOrganisations():void
+            {
+                organisations = em.findAll(Organisation);
+            }
 
-			private function loadRoles():void
-			{
-				roles = em.findAll(Role);
-			}
+            private function loadRoles():void
+            {
+                roles = em.findAll(Role);
+            }
 
-			private function dateLabel(item:Object, column:DataGridColumn):String
-			{
-				return dateFormatter.format(item[column.dataField]);
-			}
+            private function dateLabel(item:Object, column:DataGridColumn):String
+            {
+                return dateFormatter.format(item[column.dataField]);
+            }
 
-			private function nameLabel(item:Object, column:DataGridColumn):String
-			{
-				return item[column.dataField].name;
-			}
-		]]>
-	</mx:Script>
+            private function nameLabel(item:Object, column:DataGridColumn):String
+            {
+                return item[column.dataField].name;
+            }
+        ]]>
+    </mx:Script>
 
-	<mx:DateFormatter id="dateFormatter" formatString="DD/MM/YYYY"/>
+    <mx:DateFormatter id="dateFormatter" formatString="DD/MM/YYYY"/>
 
     <mx:TabNavigator width="100%" height="100%" paddingBottom="10" paddingTop="10"
-    	paddingLeft="10" paddingRight="10" borderStyle="solid">
+        paddingLeft="10" paddingRight="10" borderStyle="solid">
         <mx:VBox width="100%" label="Contacts">
-			<mx:ApplicationControlBar width="100%" cornerRadius="0">
-				<mx:Button label="Refresh" click="loadContacts()"/>
-				<mx:Button label="New Contact" click="contactForm.newItem()"/>
-				<mx:Button label="Save Contact" click="contactForm.saveItem()"/>
-				<mx:Button label="Delete Contact" click="contactForm.deleteItem()"/>
-			</mx:ApplicationControlBar>
-			<mx:HBox width="100%" height="100%" top="8" left="8" right="8" bottom="8" paddingTop="10"
-				verticalAlign="bottom">
-				<mx:DataGrid id="dg1" dataProvider="{contacts}" width="100%" rowCount="12"
-					click="selectedContact = dg1.selectedItem as Contact">
-					<mx:columns>
-						<mx:DataGridColumn dataField="id" headerText="ID"/>
-						<mx:DataGridColumn dataField="name" headerText="Name"/>
-					</mx:columns>
-				</mx:DataGrid>
-				<mx:VBox width="100%">
-					<local:ContactForm id="contactForm" contact="{dg1.selectedItem as Contact}"
-						organisations="{organisations}" roles="{roles}"/>
-					<mx:DataGrid id="dg3" dataProvider="{selectedContact.orders}"
-						width="100%" rowCount="4">
-						<mx:columns>
-							<mx:DataGridColumn dataField="contact" headerText="Contact" labelFunction="nameLabel"/>
-							<mx:DataGridColumn dataField="item" headerText="Item"/>
-							<mx:DataGridColumn dataField="orderDate" headerText="Date" labelFunction="dateLabel" textAlign="right"/>
-						</mx:columns>
-					</mx:DataGrid>
-				</mx:VBox>
-			</mx:HBox>
+            <mx:ApplicationControlBar width="100%" cornerRadius="0">
+                <mx:Button label="Refresh" click="loadContacts()"/>
+                <mx:Button label="New Contact" click="contactForm.newItem()"/>
+                <mx:Button label="Save Contact" click="contactForm.saveItem()"/>
+                <mx:Button label="Delete Contact" click="contactForm.deleteItem()"/>
+            </mx:ApplicationControlBar>
+            <mx:HBox width="100%" height="100%" top="8" left="8" right="8" bottom="8" paddingTop="10"
+                verticalAlign="bottom">
+                <mx:DataGrid id="dg1" dataProvider="{contacts}" width="100%" rowCount="12"
+                    click="selectedContact = dg1.selectedItem as Contact">
+                    <mx:columns>
+                        <mx:DataGridColumn dataField="id" headerText="ID"/>
+                        <mx:DataGridColumn dataField="name" headerText="Name"/>
+                    </mx:columns>
+                </mx:DataGrid>
+                <mx:VBox width="100%">
+                    <local:ContactForm id="contactForm" contact="{dg1.selectedItem as Contact}"
+                        organisations="{organisations}" roles="{roles}"/>
+                    <mx:DataGrid id="dg3" dataProvider="{selectedContact.orders}"
+                        width="100%" rowCount="4">
+                        <mx:columns>
+                            <mx:DataGridColumn dataField="contact" headerText="Contact" labelFunction="nameLabel"/>
+                            <mx:DataGridColumn dataField="item" headerText="Item"/>
+                            <mx:DataGridColumn dataField="orderDate" headerText="Date" labelFunction="dateLabel" textAlign="right"/>
+                        </mx:columns>
+                    </mx:DataGrid>
+                </mx:VBox>
+            </mx:HBox>
         </mx:VBox>
         <mx:VBox width="100%" label="Organisations">
-			<mx:ApplicationControlBar width="100%" cornerRadius="0">
-				<mx:Button label="Refresh" click="loadOrganisations()"/>
-				<mx:Button label="New Organisation" click="organisationForm.newItem()"/>
-				<mx:Button label="Save Organisation" click="organisationForm.saveItem()"/>
-				<mx:Button label="Delete Organisation" click="organisationForm.deleteItem()"/>
-			</mx:ApplicationControlBar>
-			<mx:HBox width="100%" top="8" left="8" right="8" bottom="8" paddingTop="10">
-				<mx:DataGrid id="dg2" dataProvider="{organisations}" width="100%" rowCount="4">
-					<mx:columns>
-						<mx:DataGridColumn dataField="id" headerText="ID"/>
-						<mx:DataGridColumn dataField="name" headerText="Name"/>
-					</mx:columns>
-				</mx:DataGrid>
-				<local:OrganisationForm id="organisationForm" organisation="{dg2.selectedItem as Organisation}"/>
-			</mx:HBox>
+            <mx:ApplicationControlBar width="100%" cornerRadius="0">
+                <mx:Button label="Refresh" click="loadOrganisations()"/>
+                <mx:Button label="New Organisation" click="organisationForm.newItem()"/>
+                <mx:Button label="Save Organisation" click="organisationForm.saveItem()"/>
+                <mx:Button label="Delete Organisation" click="organisationForm.deleteItem()"/>
+            </mx:ApplicationControlBar>
+            <mx:HBox width="100%" top="8" left="8" right="8" bottom="8" paddingTop="10">
+                <mx:DataGrid id="dg2" dataProvider="{organisations}" width="100%" rowCount="4">
+                    <mx:columns>
+                        <mx:DataGridColumn dataField="id" headerText="ID"/>
+                        <mx:DataGridColumn dataField="name" headerText="Name"/>
+                    </mx:columns>
+                </mx:DataGrid>
+                <local:OrganisationForm id="organisationForm" organisation="{dg2.selectedItem as Organisation}"/>
+            </mx:HBox>
         </mx:VBox>
-	</mx:TabNavigator>
+    </mx:TabNavigator>
 
 </mx:WindowedApplication>
