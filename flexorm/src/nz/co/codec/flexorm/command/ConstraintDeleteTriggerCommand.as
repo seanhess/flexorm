@@ -22,7 +22,7 @@ package nz.co.codec.flexorm.command
 
         public function toString():String
         {
-            return "CREATE FK CONSTRAINT DELETE TRIGGER " + _statement.text;
+            return "CREATE FK CONSTRAINT DELETE TRIGGER: " + _statement.text;
         }
 
     }

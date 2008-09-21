@@ -35,7 +35,7 @@ package nz.co.codec.flexorm.command
 
         public function toString():String
         {
-            return "SELECT NESTED SET TYPES " + _statement.text;
+            return "SELECT NESTED SET TYPES: " + _statement.text;
         }
 
     }

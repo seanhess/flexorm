@@ -48,7 +48,7 @@ package nz.co.codec.flexorm
 
         private var _debugLevel:int;
 
-        private var _opt:Object;
+        private var _prefs:Object;
 
         private var deferred:Array;
 
@@ -63,13 +63,13 @@ package nz.co.codec.flexorm
             sqlConnection:SQLConnection,
             entityMap:Object,
             debugLevel:int,
-            opt:Object=null)
+            prefs:Object=null)
         {
             _schema = schema;
             _sqlConnection = sqlConnection;
             _entityMap = entityMap;
             _debugLevel = debugLevel;
-            _opt = opt;
+            _prefs = prefs;
             deferred = [];
             awaitingKeyResolution = [];
             metaTableCreated = false;
@@ -90,9 +90,9 @@ package nz.co.codec.flexorm
             _debugLevel = value;
         }
 
-        public function set opt(value:Object):void
+        public function set prefs(value:Object):void
         {
-            _opt = value;
+            _prefs = value;
         }
 
         public function loadMetadata(cls:Class, executor:IExecutor=null):Entity
@@ -176,7 +176,7 @@ package nz.co.codec.flexorm
                 }
             }
 
-            if (_opt.syncSupport && !metaTableCreated)
+            if (_prefs.syncSupport && !metaTableCreated)
                 createMetaTable(); // for synchronisation
         }
 
@@ -198,7 +198,7 @@ package nz.co.codec.flexorm
                 executor.add(command);
             }
 
-            if (_opt.syncSupport && !metaTableCreated)
+            if (_prefs.syncSupport && !metaTableCreated)
                 createMetaTableAsyn(executor); // for synchronisation
         }
 
@@ -798,7 +798,7 @@ package nz.co.codec.flexorm
             }
             var selectAllCommand:SelectCommand = new SelectCommand(_sqlConnection, _schema, table, _debugLevel);
             var insertCommand:InsertCommand = new InsertCommand(_sqlConnection, _schema, table, _debugLevel);
-            var updateCommand:UpdateCommand = new UpdateCommand(_sqlConnection, _schema, table, _opt.syncSupport, _debugLevel);
+            var updateCommand:UpdateCommand = new UpdateCommand(_sqlConnection, _schema, table, _prefs.syncSupport, _debugLevel);
             var deleteCommand:DeleteCommand = new DeleteCommand(_sqlConnection, _schema, table, _debugLevel);
             var createSynCommand:CreateSynCommand = new CreateSynCommand(_sqlConnection, _schema, table, _debugLevel);
             var createAsynCommand:CreateAsynCommand = new CreateAsynCommand(_sqlConnection, _schema, table, _debugLevel);
@@ -860,11 +860,11 @@ package nz.co.codec.flexorm
                 indexCommands.push(createIndexCommand);
             }
 
-            if (_opt.syncSupport)
+            if (_prefs.syncSupport)
             {
                 selectUpdatedCommand = new SelectCommand(_sqlConnection, _schema, table, _debugLevel);
                 selectUpdatedCommand.addSQLCondition("updated_at>:lastSyncDate");
-                updateVersionCommand = new UpdateCommand(_sqlConnection, _schema, table, _opt.syncSupport, _debugLevel);
+                updateVersionCommand = new UpdateCommand(_sqlConnection, _schema, table, _prefs.syncSupport, _debugLevel);
                 insertCommand.addColumn("version", "version");
                 updateVersionCommand.addColumn("version", "version");
                 createSynCommand.addColumn("version", SQLType.INTEGER);
@@ -884,7 +884,7 @@ package nz.co.codec.flexorm
                 updateCommand.addFilter(identity.column, identity.fkProperty);
                 deleteCommand.addFilter(identity.column, identity.fkProperty);
                 markForDeletionCommand.addFilter(identity.column, identity.fkProperty);
-                if (_opt.syncSupport)
+                if (_prefs.syncSupport)
                     updateVersionCommand.addFilter(identity.column, identity.fkProperty);
             }
 
@@ -989,7 +989,7 @@ package nz.co.codec.flexorm
                 // explicitly set.
 
                 var otmDeleteCommand:DeleteCommand = new DeleteCommand(_sqlConnection, _schema, table, _debugLevel);
-                var otmUpdateCommand:UpdateCommand = new UpdateCommand(_sqlConnection, _schema, table, _opt.syncSupport, _debugLevel);
+                var otmUpdateCommand:UpdateCommand = new UpdateCommand(_sqlConnection, _schema, table, _prefs.syncSupport, _debugLevel);
                 var ownerEntity:Entity = otm.ownerEntity;
 
                 if (ownerEntity.hasCompositeKey())
@@ -1202,7 +1202,7 @@ package nz.co.codec.flexorm
                     insertCommand.addColumn(a.indexColumn, a.indexProperty);
                     createSynCommand.addColumn(a.indexColumn, SQLType.INTEGER);
                     createAsynCommand.addColumn(a.indexColumn, SQLType.INTEGER);
-                    updateCommand = new UpdateCommand(_sqlConnection, _schema, associationTable, _opt.syncSupport, _debugLevel);
+                    updateCommand = new UpdateCommand(_sqlConnection, _schema, associationTable, _prefs.syncSupport, _debugLevel);
                     updateCommand.addColumn(a.indexColumn, a.indexProperty);
 
                     indexName = Inflector.singularize(associationTable) + "_" + a.indexColumn;
@@ -1340,7 +1340,7 @@ package nz.co.codec.flexorm
 
         private function usingCamelCaseNames():Boolean
         {
-            return (NamingStrategy.CAMEL_CASE_NAMES == _opt.namingStrategy);
+            return (NamingStrategy.CAMEL_CASE_NAMES == _prefs.namingStrategy);
         }
 
         private function getEntityFromType(asType:String):Entity

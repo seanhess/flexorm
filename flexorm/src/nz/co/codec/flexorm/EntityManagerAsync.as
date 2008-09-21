@@ -73,22 +73,9 @@ package nz.co.codec.flexorm
             }
         }
 
-//        private var running:Boolean;
-
         private var inTransaction:Boolean;
 
         private var dbFile:File;
-
-//        private function newEntityManagerAsync():EntityManagerAsync
-//        {
-//            localInstantiation = true;
-//            var instance:EntityManagerAsync = new EntityManagerAsync();
-//            localInstantiation = false;
-//            instance.entityMap = this.entityMap;
-//            instance.opt = this.opt;
-//            instance.sqlConnection = this.sqlConnection;
-//            return instance;
-//        }
 
         /**
          * Opens an asynchronous connection to the database.
@@ -373,25 +360,16 @@ package nz.co.codec.flexorm
             q.execute();
         }
 
-        public function load(cls:Class, id:int, responder:IResponder):void
+        public function load(cls:Class, id:*, responder:IResponder):void
         {
             loadItem(cls, id, responder);
         }
 
-        public function loadItem(cls:Class, id:int, responder:IResponder):void
+        public function loadItem(cls:Class, id:*, responder:IResponder):void
         {
-//            if (running)
-//            {
-//                return newEntityManagerAsync().loadItem(cls, id, responder);
-//            }
-//            else
-//            {
-//                running = true;
-//            }
             var q:BlockingExecutor = createBlockingExecutor(responder, function(data:Object):void
             {
                 clearCache();
-//                running = false;
             });
             var entity:Entity = getEntity(cls, q);
             if (entity.hasCompositeKey())
@@ -532,9 +510,8 @@ package nz.co.codec.flexorm
          * The save operation and all cascading saves are enclosed in a
          * transaction to ensure the database is left in a consistent state.
          *
-         * Options:
-         *
-         * Externally set:
+         * opt(ions), from client code:
+         * - name:String
          * - ownerClass:Class
          *     Must be set if the client code specifies an indexValue so to
          *     determine the class that owns the indexed list.
@@ -557,22 +534,32 @@ package nz.co.codec.flexorm
          * object is new, or to lft + the distance of the object's current rgt
          * value from the current lft value.
          *
-         * Internally set:
+         * SaveRecursiveArgs, system-defined:
          * - name:String
          * - a:Association (OneToMany || ManyToMany)
          * - associatedEntity:Entity
+         * - hasCompositeKey:Boolean
          * - idMap:Object
          * - mtmInsertCommand:InsertCommand
          * - indexValue:int
+         * - subInsertCommand:InsertCommand
+         * - entityType:String
+         * - fkProperty:String
+         * - lft:int
+         * - rootEval:Boolean
+         * - rootLft:int
+         * - rootSpread:int
          */
         public function save(obj:Object, responder:IResponder, opt:Object=null):void
         {
             if (obj == null)
                 return;
 
-            if (opt == null)
-                opt = {};
-
+            var args:SaveRecursiveArgs = new SaveRecursiveArgs();
+            for (var key:String in opt)
+            {
+                args[key] = opt[key];
+            }
             var q:BlockingExecutor = createBlockingExecutor(responder, function(data:Object):void
             {
                 clearCache();
@@ -583,17 +570,17 @@ package nz.co.codec.flexorm
             if (!inTransaction)
             {
                 q.add(new BeginCommand(sqlConnection));
-                saveItem(obj, q, opt);
+                saveItem(obj, q, args);
                 q.add(new CommitCommand(sqlConnection));
             }
             else
             {
-                saveItem(obj, q, opt);
+                saveItem(obj, q, args);
             }
             q.execute();
         }
 
-        private function saveItem(obj:Object, q:BlockingExecutor, opt:Object):void
+        private function saveItem(obj:Object, q:BlockingExecutor, args:SaveRecursiveArgs):void
         {
             if (obj == null)
                 return;
@@ -615,24 +602,24 @@ package nz.co.codec.flexorm
                 {
                     if (data)
                     {
-                        updateItem(entity.updateCommand.clone(), obj, entity, q, opt);
+                        updateItem(entity.updateCommand.clone(), obj, entity, q, args);
                     }
                     else
                     {
-                        createItem(entity.insertCommand.clone(), obj, entity, q, opt);
+                        createItem(entity.insertCommand.clone(), obj, entity, q, args);
                     }
                 });
             }
             else
             {
-                var id:int = obj[entity.pk.property];
-                if (id > 0)
+                var id:* = obj[entity.pk.property];
+                if (idAssigned(id))
                 {
-                    updateItem(entity.updateCommand.clone(), obj, entity, q, opt);
+                    updateItem(entity.updateCommand.clone(), obj, entity, q, args);
                 }
                 else
                 {
-                    createItem(entity.insertCommand.clone(), obj, entity, q, opt);
+                    createItem(entity.insertCommand.clone(), obj, entity, q, args);
                 }
             }
         }
@@ -642,15 +629,15 @@ package nz.co.codec.flexorm
             obj:Object,
             entity:Entity,
             q:BlockingExecutor,
-            opt:Object):void
+            args:SaveRecursiveArgs):void
         {
             saveManyToOneAssociations(obj, entity, q.branchNonBlocking());
             if (entity.superEntity)
             {
-                opt.subInsertCommand = insertCommand;
-                opt.entityType = getQualifiedClassName(entity.cls);
-                opt.fkProperty = entity.fkProperty;
-                createItem(entity.superEntity.insertCommand.clone(), obj, entity.superEntity, q, opt);
+                args.subInsertCommand = insertCommand;
+                args.entityType = getQualifiedClassName(entity.cls);
+                args.fkProperty = entity.fkProperty;
+                createItem(entity.superEntity.insertCommand.clone(), obj, entity.superEntity, q, args);
             }
             setFieldParams(insertCommand, obj, entity);
             setManyToOneAssociationParams(insertCommand, obj, entity);
@@ -658,9 +645,9 @@ package nz.co.codec.flexorm
 
             if (entity.isSuperEntity())
             {
-                insertCommand.setParam("entityType", opt.entityType);
+                insertCommand.setParam("entityType", args.entityType);
             }
-            if (opt.syncSupport && !entity.hasCompositeKey())
+            if (prefs.syncSupport && !entity.hasCompositeKey())
             {
                 insertCommand.setParam("version", 0);
                 insertCommand.setParam("serverId", 0);
@@ -670,32 +657,32 @@ package nz.co.codec.flexorm
             // if this obj is an item of a one-to-many association and matches
             // the specific entity, that is the object of the association, in
             // the entity's inheritance hierarchy...
-            if ((opt.a is OneToManyAssociation) && entity.equals(opt.associatedEntity))
+            if ((args.a is OneToManyAssociation) && entity.equals(args.associatedEntity))
             {
-                if (opt.hasCompositeKey)
+                if (args.hasCompositeKey)
                 {
-                    setIdentMapParams(insertCommand, opt.idMap);
+                    setIdentMapParams(insertCommand, args.idMap);
                 }
                 else
                 {
                     q.addFunction(function(data:Object):void
                     {
-                        insertCommand.setParam(opt.a.fkProperty, q.parent.parent.id);
+                        insertCommand.setParam(args.a.fkProperty, q.parent.parent.id);
                     });
                 }
-                if (opt.a.indexed)
-                    insertCommand.setParam(opt.a.indexProperty, opt.indexValue);
+                if (args.a.indexed)
+                    insertCommand.setParam(args.a.indexProperty, args.indexValue);
             }
-            if (opt.a == null)
+            if (args.a == null)
             {
                 for each(var a:OneToManyAssociation in entity.oneToManyInverseAssociations)
                 {
                     if (a.indexed)
                     {
                          // specified by client code
-                        if ((a.ownerEntity.cls == opt.ownerClass) && opt.indexValue)
+                        if ((a.ownerEntity.cls == args.ownerClass) && args.indexValue)
                         {
-                            insertCommand.setParam(a.indexProperty, opt.indexValue);
+                            insertCommand.setParam(a.indexProperty, args.indexValue);
                         }
                         else
                         {
@@ -720,9 +707,9 @@ package nz.co.codec.flexorm
                         id = data;
                         obj[entity.pk.property] = id;
                     }
-                    var subInsertCommand:InsertCommand = opt.subInsertCommand;
+                    var subInsertCommand:InsertCommand = args.subInsertCommand;
                     if (subInsertCommand)
-                        subInsertCommand.setParam(opt.fkProperty, id);
+                        subInsertCommand.setParam(args.fkProperty, id);
 
                     q.id = id;
                     q.label = entity.name;
@@ -732,24 +719,24 @@ package nz.co.codec.flexorm
 
             // The mtmInsertCommand must be executed after the associated entity
             // has been inserted to maintain referential integrity.
-            if ((opt.a is ManyToManyAssociation) && entity.equals(opt.associatedEntity))
+            if ((args.a is ManyToManyAssociation) && entity.equals(args.associatedEntity))
             {
-                var mtmInsertCommand:InsertCommand = opt.mtmInsertCommand;
-                if (opt.hasCompositeKey || (IDStrategy.UID == entity.pk.strategy))
+                var mtmInsertCommand:InsertCommand = args.mtmInsertCommand;
+                if (args.hasCompositeKey || (IDStrategy.UID == entity.pk.strategy))
                 {
                     setIdentityParams(mtmInsertCommand, obj, entity);
-                    setIdentMapParams(mtmInsertCommand, opt.idMap);
+                    setIdentMapParams(mtmInsertCommand, args.idMap);
                 }
                 else
                 {
                     q.addFunction(function(data:Object):void
                     {
                         mtmInsertCommand.setParam(entity.fkProperty, data);
-                        mtmInsertCommand.setParam(opt.a.ownerEntity.fkProperty, q.parent.parent.id);
+                        mtmInsertCommand.setParam(args.a.ownerEntity.fkProperty, q.parent.parent.id);
                     });
                 }
-                if (opt.a.indexed)
-                    mtmInsertCommand.setParam(opt.a.indexProperty, opt.indexValue);
+                if (args.a.indexed)
+                    mtmInsertCommand.setParam(args.a.indexProperty, args.indexValue);
 
                 q.add(mtmInsertCommand);
             }
@@ -768,32 +755,32 @@ package nz.co.codec.flexorm
             obj:Object,
             entity:Entity,
             q:BlockingExecutor,
-            opt:Object):void
+            args:SaveRecursiveArgs):void
         {
             saveManyToOneAssociations(obj, entity, q.branchNonBlocking());
             if (entity.superEntity)
-                updateItem(entity.superEntity.updateCommand.clone(), obj, entity.superEntity, q, opt);
+                updateItem(entity.superEntity.updateCommand.clone(), obj, entity.superEntity, q, args);
             setIdentityParams(updateCommand, obj, entity);
             setFieldParams(updateCommand, obj, entity);
             setManyToOneAssociationParams(updateCommand, obj, entity);
             setUpdateTimestampParams(updateCommand);
 
-            if ((opt.a is OneToManyAssociation) && entity.equals(opt.associatedEntity))
+            if ((args.a is OneToManyAssociation) && entity.equals(args.associatedEntity))
             {
-                setIdentMapParams(updateCommand, opt.idMap);
-                if (opt.a.indexed)
-                    updateCommand.setParam(opt.a.indexProperty, opt.indexValue);
+                setIdentMapParams(updateCommand, args.idMap);
+                if (args.a.indexed)
+                    updateCommand.setParam(args.a.indexProperty, args.indexValue);
             }
-            if (opt.a == null)
+            if (args.a == null)
             {
                 for each(var a:OneToManyAssociation in entity.oneToManyInverseAssociations)
                 {
                     if (a.indexed)
                     {
                          // specified by client code
-                        if ((a.ownerEntity.cls == opt.ownerClass) && opt.indexValue)
+                        if ((a.ownerEntity.cls == args.ownerClass) && args.indexValue)
                         {
-                            updateCommand.setParam(a.indexProperty, opt.indexValue);
+                            updateCommand.setParam(a.indexProperty, args.indexValue);
                         }
                         else
                         {
@@ -805,13 +792,13 @@ package nz.co.codec.flexorm
             q.add(updateCommand);
             q.data = obj;
 
-            if ((opt.a is ManyToManyAssociation) && entity.equals(opt.associatedEntity))
+            if ((args.a is ManyToManyAssociation) && entity.equals(args.associatedEntity))
             {
-                var mtmInsertCommand:InsertCommand = opt.mtmInsertCommand;
+                var mtmInsertCommand:InsertCommand = args.mtmInsertCommand;
                 setIdentityParams(mtmInsertCommand, obj, entity);
-                setIdentMapParams(mtmInsertCommand, opt.idMap);
-                if (opt.a.indexed)
-                    mtmInsertCommand.setParam(opt.a.indexProperty, opt.indexValue);
+                setIdentMapParams(mtmInsertCommand, args.idMap);
+                if (args.a.indexed)
+                    mtmInsertCommand.setParam(args.a.indexProperty, args.indexValue);
 
                 q.add(mtmInsertCommand);
             }
@@ -831,7 +818,7 @@ package nz.co.codec.flexorm
             {
                 var value:Object = obj[a.property];
                 if (value && !a.inverse && isCascadeSave(a))
-                    saveItem(value, executor.branchBlocking(), {});
+                    saveItem(value, executor.branchBlocking(), new SaveRecursiveArgs());
             }
         }
 
@@ -854,16 +841,15 @@ package nz.co.codec.flexorm
                         var associatedEntity:Entity = a.getAssociatedEntity(itemEntity);
                         if (associatedEntity)
                         {
-                            var opt:Object = {
-                                a               : a,
-                                associatedEntity: associatedEntity,
-                                hasCompositeKey : entity.hasCompositeKey(),
-                                idMap           : idMap
-                            };
+                            var args:SaveRecursiveArgs = new SaveRecursiveArgs();
+                            args.a = a;
+                            args.associatedEntity = associatedEntity;
+                            args.hasCompositeKey = entity.hasCompositeKey();
+                            args.idMap = idMap;
                             if (a.indexed)
-                                opt.indexValue = i;
+                                args.indexValue = i;
 
-                            saveItem(item, q, opt);
+                            saveItem(item, q, args);
                         }
                         else
                         {
@@ -939,7 +925,7 @@ package nz.co.codec.flexorm
                                     updateCommand.setParam(a.indexProperty, i);
                                     q.add(updateCommand);
                                 }
-                                saveItem(item, q, {});
+                                saveItem(item, q, new SaveRecursiveArgs());
                             }
                             existing.splice(k, 1);
                         }
@@ -950,17 +936,16 @@ package nz.co.codec.flexorm
                             {
                                 // insert link in associationTable after
                                 // inserting the associated entity instance
-                                var opt:Object = {
-                                    a               : a,
-                                    associatedEntity: a.associatedEntity,
-                                    hasCompositeKey : hasCompositeKey,
-                                    idMap           : idMap,
-                                    mtmInsertCommand: insertCommand
-                                };
+                                var args:SaveRecursiveArgs = new SaveRecursiveArgs();
+                                args.a = a;
+                                args.associatedEntity = a.associatedEntity;
+                                args.hasCompositeKey = hasCompositeKey;
+                                args.idMap = idMap;
+                                args.mtmInsertCommand = insertCommand;
                                 if (a.indexed)
-                                    opt.indexValue = i;
+                                    args.indexValue = i;
 
-                                saveItem(item, q, opt);
+                                saveItem(item, q, args);
                             }
                             else // just create the link instead
                             {
@@ -996,7 +981,7 @@ package nz.co.codec.flexorm
             q.execute();
         }
 
-        public function removeItem(cls:Class, id:int, responder:IResponder):void
+        public function removeItem(cls:Class, id:*, responder:IResponder):void
         {
             loadItem(cls, id, new Responder(
 
@@ -1144,8 +1129,8 @@ package nz.co.codec.flexorm
             }
 
             // Must be after keys on instance has been loaded, which includes:
-            // - loadManyToOneAssociation to load composite keys, and
-            // - loadSuperProperties to load inherited keys.
+            // # loadManyToOneAssociation to load composite keys, and
+            // # loadSuperProperties to load inherited keys.
             if (entity.hasCompositeKey())
             {
                 // then must be after many-to-one associations have been loaded
@@ -1198,16 +1183,6 @@ package nz.co.codec.flexorm
                 // from the join in the original select. I just need to call
                 // typeObject to load any associations of the super entity.
                 setSuperProperties(instance, typeObject(row, superEntity, q), superEntity);
-/*
-                loadEntity(superEntity, idMap, q.branchBlocking());
-//                var branch:BlockingExecutor = q.branchBlocking();
-//                loadEntity(superEntity, idMap, branch);
-                q.addFunction(function(data:Object):void
-                {
-                    setSuperProperties(instance, data.data, superEntity);
-//                    setSuperProperties(instance, branch.data, superEntity);
-                });
-*/
             }
             else
             {
@@ -1264,8 +1239,8 @@ package nz.co.codec.flexorm
                 }
                 else
                 {
-                    var id:int = row[a.fkColumn];
-                    if (id > 0)
+                    var id:* = row[a.fkColumn];
+                    if (idAssigned(id))
                     {
                         idMap = getIdentityMap(associatedEntity.fkProperty, id);
                     }
@@ -1273,12 +1248,9 @@ package nz.co.codec.flexorm
                 if (idMap)
                 {
                     loadComplexEntity(associatedEntity, idMap, q.branchBlocking());
-//                    var branch:BlockingExecutor = q.branchBlocking();
-//                    loadComplexEntity(associatedEntity, idMap, branch);
                     q.addFunction(function(data:Object):void
                     {
                         instance[a.property] = data.data;
-//                        instance[a.property] = branch.data;
                     });
                 }
             }
@@ -1309,12 +1281,9 @@ package nz.co.codec.flexorm
                 // TODO optimise if not multiple types
 
                 loadOneToManyAssociationInternal(a, idMap, q.branchBlocking());
-//                var branch:BlockingExecutor = q.branchBlocking();
-//                loadOneToManyAssociationInternal(a, idMap, branch);
                 q.addFunction(function(data:Object):void
                 {
-                    instance[a.property] = data.data; // TODO check
-//                    instance[a.property] = branch.data;
+                    instance[a.property] = data.data;
                 });
 //			}
         }

@@ -20,15 +20,17 @@ package nz.co.codec.flexorm
 
         function fetchCriteriaFirstResult(crit:Criteria):Object;
 
-        function load(cls:Class, id:int):Object;
+        function load(cls:Class, id:*):Object;
 
-        function loadItem(cls:Class, id:int):Object;
+        function loadItem(cls:Class, id:*):Object;
 
         function loadItemByCompositeKey(cls:Class, keys:Array):Object;
 
-        function save(obj:Object, opt:Object=null):int;
+        function save(obj:Object, opt:Object=null):*;
 
-        function removeItem(cls:Class, id:int):void;
+        function saveHierarchicalObject(obj:Object, opt:Object=null):Object;
+
+        function removeItem(cls:Class, id:*):void;
 
         function removeItemByCompositeKey(cls:Class, keys:Array):void;
 
@@ -50,8 +52,6 @@ package nz.co.codec.flexorm
 
 
         // Not fully implemented ------------------------------
-
-        function saveHierarchy(obj:Object, opt:Object=null):Object;
 
         function loadDynamicObject(name:String, id:int):Object;
 

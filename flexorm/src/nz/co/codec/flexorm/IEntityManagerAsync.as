@@ -16,9 +16,9 @@ package nz.co.codec.flexorm
 
         function fetchCriteriaFirstResult(crit:Criteria, responder:IResponder):void;
 
-        function load(cls:Class, id:int, responder:IResponder):void;
+        function load(cls:Class, id:*, responder:IResponder):void;
 
-        function loadItem(cls:Class, id:int, responder:IResponder):void;
+        function loadItem(cls:Class, id:*, responder:IResponder):void;
 
         function loadItemByCompositeKey(cls:Class, keys:Array, responder:IResponder):void;
 
@@ -26,7 +26,7 @@ package nz.co.codec.flexorm
 
         function remove(obj:Object, responder:IResponder):void;
 
-        function removeItem(cls:Class, id:int, responder:IResponder):void;
+        function removeItem(cls:Class, id:*, responder:IResponder):void;
 
         function markForDeletion(obj:Object, responder:IResponder):void;
 

@@ -1,6 +1,6 @@
 package nz.co.codec.flexorm
 {
-    public class Options
+    public class Prefs
     {
         public static const NAMING_STRATEGY:String = "namingStrategy";
 

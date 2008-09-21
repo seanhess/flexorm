@@ -31,7 +31,7 @@ package nz.co.codec.flexorm
 
         private var _debugLevel:int;
 
-        private var _options:Object;
+        private var _prefs:Object;
 
         // A map of Entities using the Entity name as key
         private var _entityMap:Object;
@@ -44,9 +44,9 @@ package nz.co.codec.flexorm
         public function EntityManagerBase()
         {
             _schema = DEFAULT_SCHEMA;
-            _options = {};
-            _options.namingStrategy = NamingStrategy.UNDERSCORE_NAMES;
-            _options.syncSupport = false;
+            _prefs = {};
+            _prefs.namingStrategy = NamingStrategy.UNDERSCORE_NAMES;
+            _prefs.syncSupport = false;
             _debugLevel = 0;
             _entityMap = {};
             clearCache();
@@ -60,7 +60,7 @@ package nz.co.codec.flexorm
         public function set sqlConnection(value:SQLConnection):void
         {
             _sqlConnection = value;
-            _introspector = new EntityIntrospector(_schema, value, _entityMap, _debugLevel, _options);
+            _introspector = new EntityIntrospector(_schema, value, _entityMap, _debugLevel, _prefs);
         }
 
         public function get sqlConnection():SQLConnection
@@ -91,7 +91,7 @@ package nz.co.codec.flexorm
         }
 
         /**
-         * Valid options include:
+         * Valid preferences include:
          *
          * - namingStrategy:String
          *     Valid values:
@@ -102,19 +102,19 @@ package nz.co.codec.flexorm
          * - syncSupport:Boolean
          *
          */
-        public function set options(value:Object):void
+        public function set prefs(value:Object):void
         {
             if (value)
             {
-                _options = value;
+                _prefs = value;
                 if (value.hasOwnProperty("schema"))
                     _schema = value.schema;
             }
         }
 
-        public function get options():Object
+        public function get prefs():Object
         {
-            return _options;
+            return _prefs;
         }
 
         public function get entityMap():Object
@@ -138,7 +138,7 @@ package nz.co.codec.flexorm
                 Class(getDefinitionByName(getQualifiedClassName(obj)));
         }
 
-        protected function getIdentityMap(key:String, id:int):Object
+        protected function getIdentityMap(key:String, id:*):Object
         {
             var map:Object = {};
             map[key] = id;
@@ -344,6 +344,11 @@ package nz.co.codec.flexorm
         protected function isDynamicObject(obj:Object):Boolean
         {
             return (OBJECT_TYPE == getClassName(getClass(obj)));
+        }
+
+        protected function idAssigned(id:*):Boolean
+        {
+            return ((id is int && id > 0) || (id is String && id != null));
         }
 
     }

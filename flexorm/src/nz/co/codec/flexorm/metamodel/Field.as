@@ -8,7 +8,7 @@ package nz.co.codec.flexorm.metamodel
 
         public var type:String;
 
-        public function Field(hash:Object = null)
+        public function Field(hash:Object=null)
         {
             for (var key:String in hash)
             {

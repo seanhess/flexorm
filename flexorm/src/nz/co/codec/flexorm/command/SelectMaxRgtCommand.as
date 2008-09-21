@@ -38,7 +38,7 @@ package nz.co.codec.flexorm.command
 
         public function toString():String
         {
-            return "SELECT MAX RGT " + _statement.text;
+            return "SELECT MAX RGT: " + _statement.text;
         }
 
     }

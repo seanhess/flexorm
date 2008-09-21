@@ -153,9 +153,9 @@ package nz.co.codec.flexorm
         public function findAll(cls:Class):ArrayCollection
         {
             var entity:Entity = getEntity(cls);
-            var command:SelectCommand = entity.selectAllCommand;
-            command.execute();
-            var result:ArrayCollection = typeArray(command.result, entity);
+            var selectAllCommand:SelectCommand = entity.selectAllCommand;
+            selectAllCommand.execute();
+            var result:ArrayCollection = typeArray(selectAllCommand.result, entity);
             clearCache();
             return result;
         }
@@ -166,12 +166,12 @@ package nz.co.codec.flexorm
          */
         public function loadOneToManyAssociation(a:OneToManyAssociation, idMap:Object):ArrayCollection
         {
-            var result:ArrayCollection = loadOneToManyAssociationInternal(a, idMap);
+            var result:ArrayCollection = loadOneToManyAssociationRecursive(a, idMap);
             clearCache();
             return result;
         }
 
-        private function loadOneToManyAssociationInternal(a:OneToManyAssociation, idMap:Object):ArrayCollection
+        private function loadOneToManyAssociationRecursive(a:OneToManyAssociation, idMap:Object):ArrayCollection
         {
             var items:Array = [];
             for each(var type:AssociatedType in a.associatedTypes)
@@ -247,7 +247,7 @@ package nz.co.codec.flexorm
             return result;
         }
 
-        private function loadNestedSets(entity:Entity, parentEntity:Entity, id:int, lft:int, rgt:int):void
+        private function loadNestedSets(entity:Entity, parentEntity:Entity, id:*, lft:int, rgt:int):void
         {
             var row:Object;
             if (lft < 0 || rgt < 1)
@@ -342,12 +342,12 @@ package nz.co.codec.flexorm
         /**
          * Load an object from the database of the requested type and given id.
          */
-        public function load(cls:Class, id:int):Object
+        public function load(cls:Class, id:*):Object
         {
             return loadItem(cls, id);
         }
 
-        public function loadItem(cls:Class, id:int):Object
+        public function loadItem(cls:Class, id:*):Object
         {
             var entity:Entity = getEntity(cls);
             if (entity.hasCompositeKey())
@@ -483,9 +483,8 @@ package nz.co.codec.flexorm
          * The save operation and all cascading saves are enclosed in a
          * transaction to ensure the database is left in a consistent state.
          *
-         * Options:
-         *
-         * Externally set:
+         * opt(ions), from client code:
+         * - name:String
          * - ownerClass:Class
          *     Must be set if the client code specifies an indexValue so to
          *     determine the class that owns the indexed list.
@@ -508,37 +507,45 @@ package nz.co.codec.flexorm
          * object is new, or to lft + the distance of the object's current rgt
          * value from the current lft value.
          *
-         * Internally set:
+         * SaveRecursiveArgs, system-defined:
          * - name:String
          * - a:Association (OneToMany || ManyToMany)
          * - associatedEntity:Entity
          * - idMap:Object
          * - mtmInsertCommand:InsertCommand
          * - indexValue:int
+         * - subInsertCommand:InsertCommand
+         * - entityType:String
+         * - fkProperty:String
+         * - lft:int
+         * - rootEval:Boolean
+         * - rootLft:int
+         * - rootSpread:int
          */
-        public function save(obj:Object, opt:Object=null):int
+        public function save(obj:Object, opt:Object=null):*
         {
             if (obj == null)
                 return 0;
 
-            if (opt == null)
-                opt = {};
-            opt.rootEval = false;
-
-            resetMapForDynamicObjects(opt.name);
-            var id:int = 0;
+            var args:SaveRecursiveArgs = new SaveRecursiveArgs();
+            for (var key:String in opt)
+            {
+                args[key] = opt[key];
+            }
+            resetMapForDynamicObjects(args.name);
+            var id:*;
             try {
                 // if not already part of a programmer-defined transaction,
                 // then start one to group all cascade 'save-update' operations
                 if (!inTransaction)
                 {
                     sqlConnection.begin();
-                    id = saveItem(obj, opt);
+                    id = saveItem(obj, args);
                     sqlConnection.commit();
                 }
                 else
                 {
-                    id = saveItem(obj, opt);
+                    id = saveItem(obj, args);
                 }
             }
             catch (e:SQLError)
@@ -548,7 +555,7 @@ package nz.co.codec.flexorm
             return id;
         }
 
-        public function saveHierarchy(obj:Object, opt:Object=null):Object
+        public function saveHierarchicalObject(obj:Object, opt:Object=null):Object
         {
             if (obj is IHierarchicalObject)
             {
@@ -557,17 +564,17 @@ package nz.co.codec.flexorm
             }
             else
             {
-                throw new Error("Calling saveHierarchy on a non-hierarchical object. ");
+                throw new Error("Calling saveHierarchicalObject on a non-hierarchical object. ");
             }
         }
 
-        private function saveItem(obj:Object, opt:Object):int
+        private function saveItem(obj:Object, args:SaveRecursiveArgs):*
         {
             if (obj == null)
                 return 0;
 
-            var id:int = 0;
-            var entity:Entity = getEntityForObject(obj, opt.name);
+            var id:*;
+            var entity:Entity = getEntityForObject(obj, args.name);
             if (entity.hasCompositeKey())
             {
                 var selectCommand:SelectCommand = entity.selectCommand;
@@ -588,26 +595,26 @@ package nz.co.codec.flexorm
                 // for now without interfering with the persistent object.
                 if (result && result[0])
                 {
-                    updateItem(obj, entity, opt);
+                    updateItem(obj, entity, args);
                 }
                 else
                 {
-                    createItem(obj, entity, opt);
+                    createItem(obj, entity, args);
                 }
             }
             else
             {
                 id = obj[entity.pk.property];
-                if (id > 0)
+                if (idAssigned(id))
                 {
-                    updateItem(obj, entity, opt);
+                    updateItem(obj, entity, args);
                 }
                 else
                 {
-                    createItem(obj, entity, opt);
+                    createItem(obj, entity, args);
                 }
             }
-            if (!entity.hasCompositeKey() && id == 0)
+            if (!entity.hasCompositeKey() && !idAssigned(id))
             {
                 // Set ID from created item
                 id = obj[entity.pk.property];
@@ -615,7 +622,7 @@ package nz.co.codec.flexorm
             return id;
         }
 
-        private function createItem(obj:Object, entity:Entity, opt:Object):void
+        private function createItem(obj:Object, entity:Entity, args:SaveRecursiveArgs):void
         {
             saveManyToOneAssociations(obj, entity);
             var insertCommand:InsertCommand = entity.insertCommand;
@@ -623,11 +630,11 @@ package nz.co.codec.flexorm
             {
                 if (!entity.hasCompositeKey())
                 {
-                    opt.subInsertCommand = insertCommand;
-                    opt.entityType = getQualifiedClassName(entity.cls);
-                    opt.fkProperty = entity.fkProperty;
+                    args.subInsertCommand = insertCommand;
+                    args.entityType = getQualifiedClassName(entity.cls);
+                    args.fkProperty = entity.fkProperty;
                 }
-                createItem(obj, entity.superEntity, opt);
+                createItem(obj, entity.superEntity, args);
             }
             setFieldParams(insertCommand, obj, entity);
             setManyToOneAssociationParams(insertCommand, obj, entity);
@@ -635,49 +642,50 @@ package nz.co.codec.flexorm
 
             if (entity.isSuperEntity())
             {
-                insertCommand.setParam("entityType", opt.entityType);
+                insertCommand.setParam("entityType", args.entityType);
             }
-            if (options.syncSupport && !entity.hasCompositeKey())
+            if (prefs.syncSupport && !entity.hasCompositeKey())
             {
                 insertCommand.setParam("version", 0);
                 insertCommand.setParam("serverId", 0);
             }
             insertCommand.setParam("markedForDeletion", false);
 
-            if ((opt.a is OneToManyAssociation) && entity.equals(opt.associatedEntity))
+            if ((args.a is OneToManyAssociation) && entity.equals(args.associatedEntity))
             {
-                setIdentMapParams(insertCommand, opt.idMap);
-                if (opt.a.hierarchical)
+                setIdentMapParams(insertCommand, args.idMap);
+                if (args.a.hierarchical)
                 {
-                    openGap(opt.lft, 2, entity);
-                    insertCommand.setParam("lft", opt.lft);
-                    insertCommand.setParam("rgt", opt.lft + 1);
-                    opt.lft++;
+                    openGap(args.lft, 2, entity);
+                    insertCommand.setParam("lft", args.lft);
+                    insertCommand.setParam("rgt", args.lft + 1);
+                    args.lft++;
                 }
-                else if (opt.a.indexed)
-                    insertCommand.setParam(opt.a.indexProperty, opt.indexValue);
+                else if (args.a.indexed)
+                    insertCommand.setParam(args.a.indexProperty, args.indexValue);
             }
-            if (opt.a == null)
+            if (args.a == null)
             {
                 for each(var a:OneToManyAssociation in entity.oneToManyInverseAssociations)
                 {
                     if (a.hierarchical)
                     {
-                        if (!opt.lft)
+                        if (args.lft == -1)
+                        {
                             trace("WARNING new left boundary/position not set on a nested set object. ");
-
-                        opt.lft = opt.lft || 0;
-                        openGap(opt.lft, 2, entity);
-                        insertCommand.setParam("lft", opt.lft);
-                        insertCommand.setParam("rgt", opt.lft + 1);
-                        opt.lft++;
+                            args.lft = 0;
+                        }
+                        openGap(args.lft, 2, entity);
+                        insertCommand.setParam("lft", args.lft);
+                        insertCommand.setParam("rgt", args.lft + 1);
+                        args.lft++;
                     }
                     else if (a.indexed)
                     {
                          // specified from client code
-                        if ((a.ownerEntity.cls == opt.ownerClass) && opt.indexValue)
+                        if ((a.ownerEntity.cls == args.ownerClass) && args.indexValue)
                         {
-                            insertCommand.setParam(a.indexProperty, opt.indexValue);
+                            insertCommand.setParam(a.indexProperty, args.indexValue);
                         }
                         else
                         {
@@ -703,80 +711,81 @@ package nz.co.codec.flexorm
                     id = insertCommand.lastInsertRowID;
                     obj[entity.pk.property] = id;
                 }
-                var subInsertCommand:InsertCommand = opt.subInsertCommand;
+                var subInsertCommand:InsertCommand = args.subInsertCommand;
                 if (subInsertCommand)
-                    subInsertCommand.setParam(opt.fkProperty, id);
+                    subInsertCommand.setParam(args.fkProperty, id);
             }
 
             // The mtmInsertCommand must be executed after the associated entity
             // has been inserted to maintain referential integrity
-            if ((opt.a is ManyToManyAssociation) && entity.equals(opt.associatedEntity))
+            if ((args.a is ManyToManyAssociation) && entity.equals(args.associatedEntity))
             {
-                var mtmInsertCommand:InsertCommand = opt.mtmInsertCommand;
+                var mtmInsertCommand:InsertCommand = args.mtmInsertCommand;
                 setIdentityParams(mtmInsertCommand, obj, entity);
-                setIdentMapParams(mtmInsertCommand, opt.idMap);
-                if (opt.a.indexed)
-                    mtmInsertCommand.setParam(opt.a.indexProperty, opt.indexValue);
+                setIdentMapParams(mtmInsertCommand, args.idMap);
+                if (args.a.indexed)
+                    mtmInsertCommand.setParam(args.a.indexProperty, args.indexValue);
 
                 mtmInsertCommand.execute();
             }
-            saveOneToManyAssociations(obj, entity, opt);
+            saveOneToManyAssociations(obj, entity, args);
             saveManyToManyAssociations(obj, entity);
         }
 
-        private function updateItem(obj:Object, entity:Entity, opt:Object):void
+        private function updateItem(obj:Object, entity:Entity, args:SaveRecursiveArgs):void
         {
             if (obj == null || entity == null)
                 return;
 
             saveManyToOneAssociations(obj, entity);
-            updateItem(obj, entity.superEntity, opt);
+            updateItem(obj, entity.superEntity, args);
             var updateCommand:UpdateCommand = entity.updateCommand;
             setIdentityParams(updateCommand, obj, entity);
             setFieldParams(updateCommand, obj, entity);
             setManyToOneAssociationParams(updateCommand, obj, entity);
             setUpdateTimestampParams(updateCommand);
 
-            if ((opt.a is OneToManyAssociation) && entity.equals(opt.associatedEntity))
+            if ((args.a is OneToManyAssociation) && entity.equals(args.associatedEntity))
             {
-                setIdentMapParams(updateCommand, opt.idMap);
-                if (opt.a.hierarchical)
+                setIdentMapParams(updateCommand, args.idMap);
+                if (args.a.hierarchical)
                 {
-                    setNestedSetParams(updateCommand, IHierarchicalObject(obj), opt, entity);
-                    opt.lft++;
+                    setNestedSetParams(updateCommand, IHierarchicalObject(obj), args, entity);
+                    args.lft++;
                 }
-                else if (opt.a.indexed)
-                    updateCommand.setParam(opt.a.indexProperty, opt.indexValue);
+                else if (args.a.indexed)
+                    updateCommand.setParam(args.a.indexProperty, args.indexValue);
             }
-            if (opt.a == null)
+            if (args.a == null)
             {
                 for each(var a:OneToManyAssociation in entity.oneToManyInverseAssociations)
                 {
                     if (a.hierarchical)
                     {
                         var node:IHierarchicalObject = IHierarchicalObject(obj);
-                        if (!opt.rootEval)
+                        if (!args.rootEval)
                         {
                             // Perform once for root node
                             var spread:int = node.rgt - node.lft + 1;
                             closeGap(node.lft, spread, entity);
-                            opt.rootLft = node.lft;
-                            opt.rootSpread = spread;
-                            opt.rootEval = true;
+                            args.rootLft = node.lft;
+                            args.rootSpread = spread;
+                            args.rootEval = true;
                         }
-                        if (!opt.lft)
+                        if (args.lft == -1)
+                        {
                             trace("WARNING new left boundary/position not set on a nested set object. ");
-
-                        opt.lft = opt.lft || 0;
-                        setNestedSetParams(updateCommand, node, opt, entity);
-                        opt.lft++;
+                            args.lft = 0;
+                        }
+                        setNestedSetParams(updateCommand, node, args, entity);
+                        args.lft++;
                     }
                     else if (a.indexed)
                     {
                          // specified from client code
-                        if ((a.ownerEntity.cls == opt.ownerClass) && opt.indexValue)
+                        if ((a.ownerEntity.cls == args.ownerClass) && args.indexValue)
                         {
-                            updateCommand.setParam(a.indexProperty, opt.indexValue);
+                            updateCommand.setParam(a.indexProperty, args.indexValue);
                         }
                         else
                         {
@@ -789,43 +798,43 @@ package nz.co.codec.flexorm
 
             // The mtmInsertCommand must be executed after the associated entity
             // has been inserted to maintain referential integrity.
-            if ((opt.a is ManyToManyAssociation) && entity.equals(opt.associatedEntity))
+            if ((args.a is ManyToManyAssociation) && entity.equals(args.associatedEntity))
             {
-                var mtmInsertCommand:InsertCommand = opt.mtmInsertCommand;
+                var mtmInsertCommand:InsertCommand = args.mtmInsertCommand;
                 setIdentityParams(mtmInsertCommand, obj, entity);
-                setIdentMapParams(mtmInsertCommand, opt.idMap);
-                if (opt.a.indexed)
-                    mtmInsertCommand.setParam(opt.a.indexProperty, opt.indexValue);
+                setIdentMapParams(mtmInsertCommand, args.idMap);
+                if (args.a.indexed)
+                    mtmInsertCommand.setParam(args.a.indexProperty, args.indexValue);
 
                 mtmInsertCommand.execute();
             }
-            saveOneToManyAssociations(obj, entity, opt);
+            saveOneToManyAssociations(obj, entity, args);
             saveManyToManyAssociations(obj, entity);
         }
 
         private function setNestedSetParams(
             updateCommand:UpdateCommand,
             node:IHierarchicalObject,
-            opt:Object,
+            args:SaveRecursiveArgs,
             entity:Entity):void
         {
             // if item has moved from outside the bounds of the root node
-            if (node.lft < opt.rootLft)
+            if (node.lft < args.rootLft)
             {
                 // close gap there
                 var spread:int = node.rgt - node.lft + 1;
                 closeGap(node.lft, spread, entity);
-                opt.lft = opt.lft - spread;
+                args.lft = args.lft - spread;
             }
-            if (node.lft >= (opt.rootLft + opt.rootSpread))
+            if (node.lft >= (args.rootLft + args.rootSpread))
             {
                 // close gap there
-                closeGap(node.lft - opt.rootSpread, (node.rgt - node.lft + 1), entity);
+                closeGap(node.lft - args.rootSpread, (node.rgt - node.lft + 1), entity);
             }
             // open gap here
-            openGap(opt.lft, 2, entity);
-            updateCommand.setParam("lft", opt.lft);
-            updateCommand.setParam("rgt", opt.lft + 1);
+            openGap(args.lft, 2, entity);
+            updateCommand.setParam("lft", args.lft);
+            updateCommand.setParam("rgt", args.lft + 1);
         }
 
         private function moveBranch(node:IHierarchicalObject, newLft:int=-1):void
@@ -850,10 +859,10 @@ package nz.co.codec.flexorm
             var updateNestedSetsCommand:UpdateNestedSetsCommand = entity.updateNestedSetsCommand;
             updateNestedSetsCommand.setParam("lft", node.lft);
             updateNestedSetsCommand.setParam("rgt", node.rgt);
-            updateNestedSetsCommand.setParam("inc", (newLft - node.lft));
+            updateNestedSetsCommand.setParam("inc", (newLft - node.lft - 1));
             updateNestedSetsCommand.execute();
 
-            closeGap(node.lft, spread, entity);
+//            closeGap(node.lft, spread, entity);
         }
 
         private function closeGap(lft:int, spread:int, entity:Entity):void
@@ -889,19 +898,17 @@ package nz.co.codec.flexorm
                 var value:Object = obj[a.property];
                 if (value && !a.inverse && isCascadeSave(a))
                 {
+                    var args:SaveRecursiveArgs = new SaveRecursiveArgs();
                     if (isDynamicObject(value))
                     {
-                        saveItem(value, { name: a.property });
+                        args.name = a.property;
                     }
-                    else
-                    {
-                        saveItem(value, {});
-                    }
+                    saveItem(value, args);
                 }
             }
         }
 
-        private function saveOneToManyAssociations(obj:Object, entity:Entity, opt:Object):void
+        private function saveOneToManyAssociations(obj:Object, entity:Entity, args:SaveRecursiveArgs):void
         {
             var idMap:Object = null;
             if (entity.hasCompositeKey())
@@ -930,18 +937,18 @@ package nz.co.codec.flexorm
                         var associatedEntity:Entity = a.getAssociatedEntity(itemEntity);
                         if (associatedEntity)
                         {
-                            opt.a = a;
-                            opt.idMap = idMap;
-                            opt.associatedEntity = associatedEntity;
+                            args.a = a;
+                            args.idMap = idMap;
+                            args.associatedEntity = associatedEntity;
                             if (a.indexed && !a.hierarchical)
-                                opt.indexValue = i;
+                                args.indexValue = i;
 
                             if (associatedEntity.isDynamicObject())
-                                opt.name = a.property;
+                                args.name = a.property;
 
-                            saveItem(item, opt);
+                            saveItem(item, args);
                             if (a.hierarchical)
-                                opt.lft++;
+                                args.lft++;
                         }
                         else
                         {
@@ -950,9 +957,9 @@ package nz.co.codec.flexorm
                                             "the one-to-many association. ");
                         }
                     }
-                    opt.a = null;
-                    opt.idMap = null;
-                    opt.associationEntity = null;
+                    args.a = null;
+                    args.idMap = null;
+                    args.associatedEntity = null;
                 }
             }
         }
@@ -1012,7 +1019,7 @@ package nz.co.codec.flexorm
                                     updateCommand.setParam(a.indexProperty, i);
                                     updateCommand.execute();
                                 }
-                                saveItem(item, {});
+                                saveItem(item, new SaveRecursiveArgs());
                             }
                             existing.splice(k, 1);
                         }
@@ -1023,16 +1030,15 @@ package nz.co.codec.flexorm
                             {
                                 // insert link in associationTable after
                                 // inserting the associated entity instance
-                                var opt:Object = {
-                                    a               : a,
-                                    associatedEntity: a.associatedEntity,
-                                    idMap           : idMap,
-                                    mtmInsertCommand: insertCommand
-                                }
+                                var args:SaveRecursiveArgs = new SaveRecursiveArgs();
+                                args.a = a;
+                                args.associatedEntity = a.associatedEntity;
+                                args.idMap = idMap;
+                                args.mtmInsertCommand = insertCommand;
                                 if (a.indexed)
-                                    opt.indexValue = i;
+                                    args.indexValue = i;
 
-                                saveItem(item, opt);
+                                saveItem(item, args);
                             }
                             else // just create the link instead
                             {
@@ -1066,7 +1072,7 @@ package nz.co.codec.flexorm
             markForDeletionCommand.execute();
         }
 
-        public function removeItem(cls:Class, id:int):void
+        public function removeItem(cls:Class, id:*):void
         {
             remove(loadItem(cls, id));
         }
@@ -1078,6 +1084,9 @@ package nz.co.codec.flexorm
 
         public function remove(obj:Object):void
         {
+            if (obj == null)
+                return;
+
             // if not already part of a programmer-defined transaction,
             // then start one to group all cascade 'delete' operations
             try {
@@ -1105,6 +1114,20 @@ package nz.co.codec.flexorm
 
         private function removeEntity(entity:Entity, obj:Object):void
         {
+            if ((entity == null) || !recordExists(entity, obj))
+                return;
+
+            removeEntityRecursive(entity, obj);
+
+            if (obj is IHierarchicalObject)
+            {
+                var node:IHierarchicalObject = IHierarchicalObject(obj);
+                closeGap(node.lft, (node.rgt - node.lft + 1), entity);
+            }
+        }
+
+        private function removeEntityRecursive(entity:Entity, obj:Object):void
+        {
             if (entity == null)
                 return;
 
@@ -1119,8 +1142,26 @@ package nz.co.codec.flexorm
             var deleteCommand:DeleteCommand = entity.deleteCommand;
             setIdentityParams(deleteCommand, obj, entity);
             deleteCommand.execute();
-            removeEntity(entity.superEntity, obj);
+
+            removeEntityRecursive(entity.superEntity, obj);
             removeManyToOneAssociations(entity, obj);
+        }
+
+        private function recordExists(entity:Entity, obj:Object):Boolean
+        {
+            var selectCommand:SelectCommand = entity.selectCommand;
+            setIdentityParams(selectCommand, obj, entity);
+            selectCommand.execute();
+            var result:Array = selectCommand.result;
+            if (result && result.length > 0)
+            {
+                return true;
+            }
+            else
+            {
+                trace("Attempt to remove object with no record, or that has already been removed. ");
+                return false;
+            }
         }
 
         private function removeOneToManyAssociations(entity:Entity, obj:Object):void
@@ -1133,7 +1174,7 @@ package nz.co.codec.flexorm
                     {
                         for each(var type:AssociatedType in a.associatedTypes)
                         {
-                            removeEntity(type.associatedEntity, obj);
+                            removeEntityRecursive(type.associatedEntity, obj);
                         }
                     }
                     else
@@ -1165,7 +1206,8 @@ package nz.co.codec.flexorm
 
                     if (a.hierarchical) // make any children root nodes
                     {
-                        // moves children to far right as root nodes by default
+                        // Moves children to beyond right boundary to create
+                        // new root nodes by default
                         if (obj is IHierarchicalObject)
                             moveBranch(IHierarchicalObject(obj));
                     }
@@ -1316,8 +1358,8 @@ package nz.co.codec.flexorm
                     }
                     else
                     {
-                        var id:int = row[a.fkColumn];
-                        if (id > 0)
+                        var id:* = row[a.fkColumn];
+                        if (idAssigned(id))
                         {
                             idMap = getIdentityMap(associatedEntity.fkProperty, id);
                         }
@@ -1367,7 +1409,7 @@ package nz.co.codec.flexorm
                         instance[a.property] = getCachedChildren(parentId);
                     }
                     else
-                    instance[a.property] = loadOneToManyAssociationInternal(a, idMap);
+                    instance[a.property] = loadOneToManyAssociationRecursive(a, idMap);
                 }
             }
         }

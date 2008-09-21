@@ -43,7 +43,7 @@ package nz.co.codec.flexorm.command
 
         public function toString():String
         {
-            return "INDEX " + _statement.text;
+            return "INDEX: " + _statement.text;
         }
 
     }
