@@ -537,10 +537,20 @@ package nz.co.codec.flexorm
                 deferred.push(type);
             }
 
+            var associationIsHierarchical:Boolean = false;
+            if (new associatedEntity.cls() is IHierarchicalObject)
+            {
+                entity.parentProperty = property;
+                associationIsHierarchical = true;
+            }
+
             entity.addManyToOneAssociation(new Association(
             {
                 property        : property,
-                associatedEntity: associatedEntity
+                fkColumn        : associatedEntity.fkColumn,
+                fkProperty      : associatedEntity.fkProperty,
+                associatedEntity: associatedEntity,
+                hierarchical    : associationIsHierarchical
             }));
             entity.addDependency(associatedEntity);
         }
