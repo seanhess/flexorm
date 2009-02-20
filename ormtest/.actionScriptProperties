@@ -1,12 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <actionScriptProperties mainApplicationPath="Main.mxml" version="3">
-<compiler additionalCompilerArguments="-locale en_US -keep-as3-metadata+=Table,Id,Column,ManyToOne,OneToMany,ManyToMany,Transient" copyDependentFiles="true" enableModuleDebug="true" flexSDK="Flex 3" generateAccessible="false" htmlExpressInstall="true" htmlGenerate="false" htmlHistoryManagement="false" htmlPlayerVersion="9.0.28" htmlPlayerVersionCheck="true" outputFolderPath="bin-debug" sourceFolderPath="src" strict="true" useApolloConfig="true" verifyDigests="true" warn="true">
+<compiler additionalCompilerArguments="-locale en_US -keep-as3-metadata+=Table,Id,Column,ManyToOne,OneToMany,ManyToMany,Transient" copyDependentFiles="true" enableModuleDebug="true" generateAccessible="false" htmlExpressInstall="true" htmlGenerate="false" htmlHistoryManagement="false" htmlPlayerVersion="9.0.28" htmlPlayerVersionCheck="true" outputFolderPath="bin-debug" sourceFolderPath="src" strict="true" useApolloConfig="true" verifyDigests="true" warn="true">
 <compilerSourcePath/>
 <libraryPath defaultLinkType="1">
 <libraryPathEntry kind="4" path=""/>
-<libraryPathEntry kind="1" linkType="1" path="libs"/>
 <libraryPathEntry kind="3" linkType="1" path="/flexorm/bin/flexorm.swc" useDefaultLinkType="false"/>
-<libraryPathEntry kind="3" linkType="1" path="/codeclib/bin/codeclib.swc" useDefaultLinkType="false"/>
+<libraryPathEntry kind="1" linkType="1" path="libs"/>
 </libraryPath>
 <sourceAttachmentPath/>
 </compiler>

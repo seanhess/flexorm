@@ -3,6 +3,7 @@
     xmlns:ui="nz.co.codec.components.*"
     xmlns:toolbox="com.flextoolbox.controls.*"
     label="{contact.name}" xmlns:model="ormtest.model.*">
+   
     <mx:Script>
         <![CDATA[
             import mx.collections.ArrayCollection;
@@ -96,8 +97,8 @@
             <mx:TextInput id="emailAddr" text="{contact.emailAddr}"/>
         </mx:FormItem>
         <mx:FormItem label="Organisation:">
-            <ui:ComboBox id="organisation" dataProvider="{organisations}"
-                value="{contact.organisation}" labelField="name"/>
+            <mx:ComboBox id="organisation" dataProvider="{organisations}"
+                selectedItem="{contact.organisation}" labelField="name"/>
         </mx:FormItem>
         <mx:FormItem label="Roles:">
             <toolbox:CheckBoxList id="checkList" width="159" height="71"
