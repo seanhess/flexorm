@@ -68,10 +68,10 @@ package nz.co.codec.flexorm
         public function EntityManager()
         {
             super();
-            if (!localInstantiation)
-            {
-                throw new Error("EntityManager is a singleton. Use EntityManager.instance ");
-            }
+//            if (!localInstantiation)
+//            {
+//                throw new Error("EntityManager is a singleton. Use EntityManager.instance ");
+//            }
         }
 
         private var inTransaction:Boolean;
